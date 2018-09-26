@@ -7,7 +7,7 @@ with open('mirrors', 'r') as f:
 
 data_cn = []
 data_other = []
-for data in mirrors['mirrors']:
+for data in mirrors:
     if data['country'] == "CN":
         data_cn.append(data)
     else:

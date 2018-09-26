@@ -1,10 +1,10 @@
 #!/bin/bash
-
+set -x
 
 rm result_*|| echo "result file not exist"
 
-#1. 获取镜像源列表。TODO，需要从mirror list CMS里获取数据
-wget -O mirrors http://server-12:8900/v1/mirrors
+#1. 获取镜像源列表。从mirror list CMS里获取数据
+$WORKSPACE/lastore-tools update -j unpublished-mirrors --mirrors-url http://server-12:8900/v1/mirrors -o mirrors
 #1.1 拆分mirrors为国内和国外两个列表.
 python mirror.py
 
