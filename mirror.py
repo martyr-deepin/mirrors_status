@@ -7,8 +7,8 @@ with open('mirrors', 'r') as f:
 
 data_cn = []
 data_other = []
-for data in mirrors['data']:
-    if data['location'] == "CN":
+for data in mirrors['mirrors']:
+    if data['country'] == "CN":
         data_cn.append(data)
     else:
         data_other.append(data)
@@ -27,6 +27,7 @@ json_other = {
 
 us_qhcdn = {"id":"qhcdn","weight":100000,"name":"Qhcdn Mirror (CDN Acceleration)","url":"http://us.deepin.qhcdn.com/deepin/","location":"US","locale": {"zh_TW": {"name": "[US] Qhcdn"}, "zh_CN": {"name": "[US] Qhcdn"}}}
 json_other['data'].append(us_qhcdn)
+
 with open('mirror_cn.json', 'w') as f:
     json.dump(data_cn, f)
 
