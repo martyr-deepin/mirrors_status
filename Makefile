@@ -1,0 +1,19 @@
+BinDir=$(shell pwd)/bin
+
+bin:
+	mkdir -p bin
+	cd cmd/cdn-check; go build -v -o $(BinDir)/cdn-check
+	cd cmd/push_to_influxdb; go build -v -o $(BinDir)/push_to_influxdb
+
+.PHONY: bin
+
+jenkins_bin:
+	if [ -z "$(WORKSPACE)" ]; then exit 1; fi
+	docker run --rm -v $(WORKSPACE):/workspace -w /workspace songwentai/golang-go:1.11 bash -c "go install -mod=readonly -v ./...; mkdir -p bin; cp -v \`go env GOPATH\`/bin/* bin/; chown -R --reference=/workspace /workspace/bin"
+
+docker_image: bin docker_image0
+
+docker_image0:
+	docker build -t linuxdeepin/mirrors_status:0.0.1 .
+
+jenkins_dock_image: jenkins_bin docker_image0

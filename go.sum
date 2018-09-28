@@ -1,0 +1,4 @@
+github.com/influxdata/influxdb v1.6.3 h1:TioHM/BpNNH25J89jnL2tk45ww8e2CF+3Q/ih0CMw1I=
+github.com/influxdata/influxdb v1.6.3/go.mod h1:qZna6X/4elxqT3yI9iZYdZrWWdeFOOprn86kgg4+IzY=
+github.com/ivpusic/grpool v0.0.0-20170804092134-28957a27c944 h1:4piUplpVh6FBKTlQpmv9SA0wwvnq05nc+aEu1OSCMRk=
+github.com/ivpusic/grpool v0.0.0-20170804092134-28957a27c944/go.mod h1:WPmiAI5ExAn06vg+0JzyPzXMQutJmpb7TrBtyLJkOHQ=
