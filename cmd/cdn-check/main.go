@@ -122,7 +122,13 @@ type cdnTestResult struct {
 }
 
 func (tr cdnTestResult) save() error {
-	filename := filepath.Join("result", tr.cdnAddress+".txt")
+	err := makeResultDir()
+	if err != nil {
+		return err
+	}
+
+	filename := filepath.Join("result",
+		fmt.Sprintf("%s %s.txt", tr.cdnAddress, tr.cdnName))
 	f, err := os.Create(filename)
 	if err != nil {
 		return err
@@ -212,6 +218,39 @@ func (v cdnTestResultSlice) Swap(i, j int) {
 	v[i], v[j] = v[j], v[i]
 }
 
+func (v cdnTestResultSlice) save() error {
+	if len(v) == 0 {
+		return nil
+	}
+
+	err := makeResultDir()
+	if err != nil {
+		return err
+	}
+
+	f, err := os.Create("result/summary")
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	bw := bufio.NewWriter(f)
+
+	for _, testResult := range v {
+		const summaryFmt = "%s (%s) %.3f%% %d\n"
+		log.Printf(summaryFmt, testResult.cdnAddress,
+			testResult.cdnName, testResult.percent, testResult.numErrs)
+		fmt.Fprintf(bw, summaryFmt, testResult.cdnAddress,
+			testResult.cdnName, testResult.percent, testResult.numErrs)
+	}
+
+	err = bw.Flush()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 type cdnTestRecord struct {
 	standard *FileValidateInfo
 	result   *FileValidateInfo
@@ -268,10 +307,20 @@ func testOneCdn(cdnAddress, cdnName string, validateInfoList []*FileValidateInfo
 		numErrs:    numErrs,
 	}
 
-	os.Mkdir("result", 0755)
-	r.save()
+	err := r.save()
+	if err != nil {
+		log.Println("WARN:", err)
+	}
 
 	return r
+}
+
+func makeResultDir() error {
+	err := os.Mkdir("result", 0755)
+	if err != nil && !os.IsExist(err) {
+		return err
+	}
+	return nil
 }
 
 func main() {
@@ -313,7 +362,7 @@ func main() {
 	pool := grpool.NewPool(len(cdnAddresses), 1)
 	defer pool.Release()
 
-	var testResults []*cdnTestResult
+	var testResults cdnTestResultSlice
 	var testResultsMu sync.Mutex
 
 	pool.WaitCount(len(cdnAddresses))
@@ -330,10 +379,10 @@ func main() {
 	}
 	pool.WaitAll()
 
-	sort.Sort(cdnTestResultSlice(testResults))
-	for _, testResult := range testResults {
-		log.Printf("%s (%s) %.3f%% %d\n", testResult.cdnAddress,
-			testResult.cdnName, testResult.percent, testResult.numErrs)
+	sort.Sort(testResults)
+	err = testResults.save()
+	if err != nil {
+		log.Println("WARN:", err)
 	}
 }
 
