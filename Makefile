@@ -9,7 +9,7 @@ bin:
 
 jenkins_bin:
 	if [ -z "$(WORKSPACE)" ]; then exit 1; fi
-	docker run --rm -v $(WORKSPACE):/workspace -w /workspace songwentai/golang-go:1.11 bash -c "go install -mod=readonly -v ./...; mkdir -p bin; cp -v \`go env GOPATH\`/bin/* bin/; chown -R --reference=/workspace /workspace/bin"
+	docker run --rm -e GOPROXY=https://goproxy.deepin.io -v $(WORKSPACE):/workspace -w /workspace songwentai/golang-go:1.11 bash -c "go install -mod=readonly -v ./...; mkdir -p bin; cp -v \`go env GOPATH\`/bin/* bin/; chown -R --reference=/workspace /workspace/bin"
 
 docker_image: bin docker_image0
 
