@@ -114,7 +114,7 @@ func getValidateInfoList(changeInfo *changeInfo) ([]*FileValidateInfo, error) {
 	}
 
 	for _, added := range changeInfo.Added {
-		vi, err := checkFile("http://packages.deepin.com/deepin/", added.FilePath)
+		vi, err := checkFile("http://packages.deepin.com/deepin/", added.FilePath, true)
 		if err != nil {
 			continue
 		}
@@ -296,8 +296,10 @@ type testRecord struct {
 	err      error
 }
 
-func testOne(mirrorId string, urlPrefix string,
+func testOne(mirrorId string, urlPrefix string, mirrorWeight int,
 	validateInfoList []*FileValidateInfo) *testResult {
+	log.Printf("start test mirror %q, urlPrefix: %q, weight %d\n",
+		mirrorId, urlPrefix, mirrorWeight)
 
 	if urlPrefix == "" {
 		return &testResult{
@@ -316,7 +318,7 @@ func testOne(mirrorId string, urlPrefix string,
 	for _, validateInfo := range validateInfoList {
 		vi := validateInfo
 		pool.JobQueue <- func() {
-			validateInfo1, err := checkFile(urlPrefix, vi.FilePath)
+			validateInfo1, err := checkFile(urlPrefix, vi.FilePath, mirrorWeight >= 0)
 
 			var record testRecord
 			record.standard = vi
@@ -489,7 +491,7 @@ func main() {
 			log.Fatal("not found mirror " + optMirror)
 		}
 
-		testOne(mirror0.Id, mirror0.getUrlPrefix(), validateInfoList)
+		testOne(mirror0.Id, mirror0.getUrlPrefix(), mirror0.Weight, validateInfoList)
 	}
 
 	//cdnAddresses := map[string]string{
@@ -551,7 +553,8 @@ func testAllMirrors(mirrors0 mirrors, validateInfoList []*FileValidateInfo) {
 		mirrorCopy := mirror
 		pool.JobQueue <- func() {
 			t1 := time.Now()
-			testResult := testOne(mirrorCopy.Id, mirrorCopy.getUrlPrefix(), validateInfoList)
+			testResult := testOne(mirrorCopy.Id, mirrorCopy.getUrlPrefix(),
+				mirrorCopy.Weight, validateInfoList)
 			duration0 := time.Since(t0)
 			duration1 := time.Since(t1)
 
@@ -603,7 +606,7 @@ func pushAllMirrorsTestResults(testResults []*testResult) {
 	}
 }
 
-func checkFile(urlPrefix string, filePath string) (*FileValidateInfo, error) {
+func checkFile(urlPrefix string, filePath string, allowRetry bool) (*FileValidateInfo, error) {
 	if !strings.HasSuffix(urlPrefix, "/") {
 		urlPrefix += "/"
 	}
@@ -615,7 +618,7 @@ func checkFile(urlPrefix string, filePath string) (*FileValidateInfo, error) {
 		log.Println("WARN:", err)
 		return nil, err
 	}
-	return checkFileReq(filePath, req)
+	return checkFileReq(filePath, req, allowRetry)
 }
 
 func checkFileCdn(fileInfo fileInfo, cdnIp string) (*FileValidateInfo, error) {
@@ -627,7 +630,7 @@ func checkFileCdn(fileInfo fileInfo, cdnIp string) (*FileValidateInfo, error) {
 		return nil, err
 	}
 	req.Host = "cdn.packages.deepin.com"
-	vi, err := checkFileReq(fileInfo.FilePath, req)
+	vi, err := checkFileReq(fileInfo.FilePath, req, true)
 	return vi, err
 }
 
@@ -653,17 +656,25 @@ func (vi *FileValidateInfo) equal(other *FileValidateInfo) bool {
 		bytes.Equal(vi.MD5Sum, other.MD5Sum)
 }
 
-func checkFileReq(filePath string, req *http.Request) (vi *FileValidateInfo, err error) {
+func checkFileReq(filePath string, req *http.Request, allowRetry bool) (vi *FileValidateInfo,
+	err error) {
 	retry := func() {
 		log.Println("retry", req.URL)
 		time.Sleep(3 * time.Second)
 	}
+	n := 1
+	if allowRetry {
+		n += maxNumOfRetries
+	}
+
 loop0:
-	for i := 0; i < maxNumOfRetries+1; i++ {
+	for i := 0; i < n; i++ {
 		vi, err = checkFileReq0(filePath, req)
 
 		if err != nil {
-			errMsg := err.Error()
+			if !allowRetry {
+				return
+			}
 
 			allowRetryErrMessages := []string{
 				"connection reset by peer",
@@ -674,6 +685,7 @@ loop0:
 				"connection refused",
 			}
 
+			errMsg := err.Error()
 			for _, msg := range allowRetryErrMessages {
 				if strings.Contains(errMsg, msg) {
 					retry()

@@ -24,11 +24,11 @@ type mirror struct {
 }
 
 func (m *mirror) getUrlPrefix() (result string) {
-	if m.UrlHttps != "" {
-		result = "https://" + m.UrlHttps
-	}
 	if m.UrlHttp != "" {
 		result = "http://" + m.UrlHttp
+	}
+	if m.UrlHttps != "" {
+		result = "https://" + m.UrlHttps
 	}
 	return
 }
