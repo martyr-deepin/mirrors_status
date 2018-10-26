@@ -7,6 +7,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -14,13 +15,28 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/ivpusic/grpool"
 )
+
+var optMirror string
+var optNoTestHidden bool
+var optDevEnv bool
+var optInfluxdbAddr string
+
+var maxNumOfRetries int
+
+func init() {
+	flag.StringVar(&optMirror, "mirror", "", "")
+	flag.BoolVar(&optNoTestHidden, "no-hidden", false, "")
+	flag.BoolVar(&optDevEnv, "dev-env", false, "")
+	flag.StringVar(&optInfluxdbAddr, "influxdb-addr",
+		"http://influxdb.trend.deepin.io:10086", "")
+}
 
 const currentJsonUrl = "http://packages.deepin.com/deepin/changelist/current.json"
 
@@ -98,7 +114,7 @@ func getValidateInfoList(changeInfo *changeInfo) ([]*FileValidateInfo, error) {
 	}
 
 	for _, added := range changeInfo.Added {
-		vi, err := checkFile(added)
+		vi, err := checkFile("http://packages.deepin.com/deepin/", added.FilePath)
 		if err != nil {
 			continue
 		}
@@ -113,22 +129,30 @@ func getValidateInfoList(changeInfo *changeInfo) ([]*FileValidateInfo, error) {
 	return validateInfoList, nil
 }
 
-type cdnTestResult struct {
-	cdnAddress string
-	cdnName    string
-	records    []cdnTestRecord
-	percent    float64
-	numErrs    int
+type testResult struct {
+	name           string
+	urlPrefix      string
+	cdnNodeAddress string
+	cdnNodeName    string
+	records        []testRecord
+	percent        float64
+	numErrs        int
 }
 
-func (tr cdnTestResult) save() error {
+func (tr *testResult) save() error {
 	err := makeResultDir()
 	if err != nil {
 		return err
 	}
 
-	filename := filepath.Join("result",
-		fmt.Sprintf("%s %s.txt", tr.cdnAddress, tr.cdnName))
+	var filename string
+	if tr.cdnNodeAddress == "" {
+		filename = tr.name + ".txt"
+	} else {
+		filename = fmt.Sprintf("%s-%s-%s.txt", tr.name, tr.cdnNodeAddress,
+			tr.cdnNodeName)
+	}
+	filename = filepath.Join("result", filename)
 	f, err := os.Create(filename)
 	if err != nil {
 		return err
@@ -136,11 +160,25 @@ func (tr cdnTestResult) save() error {
 	defer f.Close()
 	bw := bufio.NewWriter(f)
 
-	fmt.Fprintln(bw, "ip:", tr.cdnAddress)
-	fmt.Fprintln(bw, "name:", tr.cdnName)
+	fmt.Fprintln(bw, "name:", tr.name)
+	fmt.Fprintln(bw, "urlPrefix:", tr.urlPrefix)
+
+	if tr.cdnNodeAddress != "" {
+		fmt.Fprintln(bw, "cdn node address:", tr.cdnNodeAddress)
+		fmt.Fprintln(bw, "cdn node name:", tr.cdnNodeName)
+	}
 	fmt.Fprintf(bw, "percent: %.3f%%\n", tr.percent)
+	if tr.percent == 100 {
+		fmt.Fprintln(bw, "sync completed")
+	}
 
 	// err
+	for _, record := range tr.records {
+		if record.err != nil {
+			fmt.Fprintln(bw, "has error")
+			break
+		}
+	}
 	fmt.Fprintln(bw, "\n# Error:")
 	for _, record := range tr.records {
 		if record.err == nil {
@@ -204,7 +242,7 @@ func (tr cdnTestResult) save() error {
 	return nil
 }
 
-type cdnTestResultSlice []*cdnTestResult
+type cdnTestResultSlice []*testResult
 
 func (v cdnTestResultSlice) Len() int {
 	return len(v)
@@ -237,10 +275,10 @@ func (v cdnTestResultSlice) save() error {
 
 	for _, testResult := range v {
 		const summaryFmt = "%s (%s) %.3f%% %d\n"
-		log.Printf(summaryFmt, testResult.cdnAddress,
-			testResult.cdnName, testResult.percent, testResult.numErrs)
-		fmt.Fprintf(bw, summaryFmt, testResult.cdnAddress,
-			testResult.cdnName, testResult.percent, testResult.numErrs)
+		log.Printf(summaryFmt, testResult.cdnNodeAddress,
+			testResult.cdnNodeName, testResult.percent, testResult.numErrs)
+		fmt.Fprintf(bw, summaryFmt, testResult.cdnNodeAddress,
+			testResult.cdnNodeName, testResult.percent, testResult.numErrs)
 	}
 
 	err = bw.Flush()
@@ -251,18 +289,80 @@ func (v cdnTestResultSlice) save() error {
 	return nil
 }
 
-type cdnTestRecord struct {
+type testRecord struct {
 	standard *FileValidateInfo
 	result   *FileValidateInfo
 	equal    bool
 	err      error
 }
 
-func testOneCdn(cdnAddress, cdnName string, validateInfoList []*FileValidateInfo) *cdnTestResult {
+func testOne(mirrorId string, urlPrefix string,
+	validateInfoList []*FileValidateInfo) *testResult {
+
+	if urlPrefix == "" {
+		return &testResult{
+			name: mirrorId,
+		}
+	}
+
 	pool := grpool.NewPool(3, 1)
 	defer pool.Release()
 	var mu sync.Mutex
-	records := make([]cdnTestRecord, 0, len(validateInfoList))
+	records := make([]testRecord, 0, len(validateInfoList))
+	var good int
+	var numErrs int
+
+	pool.WaitCount(len(validateInfoList))
+	for _, validateInfo := range validateInfoList {
+		vi := validateInfo
+		pool.JobQueue <- func() {
+			validateInfo1, err := checkFile(urlPrefix, vi.FilePath)
+
+			var record testRecord
+			record.standard = vi
+			mu.Lock()
+			if err != nil {
+				numErrs++
+				log.Println("WARN:", err)
+				record.err = err
+
+			} else {
+				record.result = validateInfo1
+				if vi.equal(validateInfo1) {
+					good++
+					record.equal = true
+				}
+			}
+			records = append(records, record)
+
+			mu.Unlock()
+			pool.JobDone()
+		}
+	}
+	pool.WaitAll()
+	percent := float64(good) / float64(len(validateInfoList)) * 100.0
+
+	r := &testResult{
+		name:      mirrorId,
+		urlPrefix: urlPrefix,
+		records:   records,
+		percent:   percent,
+		numErrs:   numErrs,
+	}
+
+	err := r.save()
+	if err != nil {
+		log.Println("WARN:", err)
+	}
+
+	return r
+}
+
+func testOneCdn(cdnAddress, cdnName string, validateInfoList []*FileValidateInfo) *testResult {
+	pool := grpool.NewPool(3, 1)
+	defer pool.Release()
+	var mu sync.Mutex
+	records := make([]testRecord, 0, len(validateInfoList))
 	var good int
 	var numErrs int
 
@@ -274,7 +374,7 @@ func testOneCdn(cdnAddress, cdnName string, validateInfoList []*FileValidateInfo
 				FilePath: vi.FilePath,
 			}, cdnAddress)
 
-			var record cdnTestRecord
+			var record testRecord
 			record.standard = vi
 			mu.Lock()
 			if err != nil {
@@ -299,12 +399,12 @@ func testOneCdn(cdnAddress, cdnName string, validateInfoList []*FileValidateInfo
 	pool.WaitAll()
 	percent := float64(good) / float64(len(validateInfoList)) * 100.0
 
-	r := &cdnTestResult{
-		cdnAddress: cdnAddress,
-		cdnName:    cdnName,
-		records:    records,
-		percent:    percent,
-		numErrs:    numErrs,
+	r := &testResult{
+		cdnNodeAddress: cdnAddress,
+		cdnNodeName:    cdnName,
+		records:        records,
+		percent:        percent,
+		numErrs:        numErrs,
 	}
 
 	err := r.save()
@@ -324,22 +424,47 @@ func makeResultDir() error {
 }
 
 func main() {
+	flag.Parse()
 	log.SetFlags(log.Lshortfile)
 
-	http.DefaultClient.Transport = &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   360 * time.Second,
-			KeepAlive: 360 * time.Second,
-			DualStack: true,
-		}).DialContext,
-		MaxIdleConns:          100,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
+	if optDevEnv {
+		http.DefaultClient.Transport = &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   60 * time.Second,
+				KeepAlive: 60 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       60 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		}
+		http.DefaultClient.Timeout = 1 * time.Minute
+		maxNumOfRetries = 3
+	} else {
+		http.DefaultClient.Transport = &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   360 * time.Second,
+				KeepAlive: 60 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       360 * time.Second,
+			TLSHandshakeTimeout:   60 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		}
+		http.DefaultClient.Timeout = 10 * time.Minute
+		maxNumOfRetries = 6
 	}
 
-	http.DefaultClient.Timeout = 10 * time.Minute
+	mirrorsUrl := "http://server-12:8900/v1/mirrors"
+	mirrors, err := getUnpublishedMirrors(mirrorsUrl)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	changeInfo, err := getChangeInfo()
 	if err != nil {
 		log.Fatal(err)
@@ -350,53 +475,147 @@ func main() {
 		log.Fatal(err)
 	}
 
-	cdnAddresses := map[string]string{
-		"52.0.26.226":    "美国弗吉尼亚州阿什本  amazon.com",
-		"221.130.199.56": "中国上海  移动",
-		"36.110.211.9":   "中国北京  电信",
-		"1.192.192.70":   "中国河南郑州  电信",
-		"42.236.10.34":   "中国河南郑州  联通",
+	if optMirror == "" {
+		testAllMirrors(mirrors, validateInfoList)
+	} else {
+		var mirror0 *mirror
+		for _, mirror := range mirrors {
+			if mirror.Id == optMirror {
+				mirror0 = mirror
+				break
+			}
+		}
+		if mirror0 == nil {
+			log.Fatal("not found mirror " + optMirror)
+		}
+
+		testOne(mirror0.Id, mirror0.getUrlPrefix(), validateInfoList)
 	}
 
-	pool := grpool.NewPool(len(cdnAddresses), 1)
+	//cdnAddresses := map[string]string{
+	//	"52.0.26.226":    "美国弗吉尼亚州阿什本  amazon.com",
+	//	"221.130.199.56": "中国上海  移动",
+	//	"36.110.211.9":   "中国北京  电信",
+	//	"1.192.192.70":   "中国河南郑州  电信",
+	//	"42.236.10.34":   "中国河南郑州  联通",
+	//}
+	//
+	//pool := grpool.NewPool(len(cdnAddresses), 1)
+	//defer pool.Release()
+	//
+	//var testResults cdnTestResultSlice
+	//var testResultsMu sync.Mutex
+	//
+	//pool.WaitCount(len(cdnAddresses))
+	//for cdnAddress, cdnName := range cdnAddresses {
+	//	cdnAddressCopy := cdnAddress
+	//	cdnNameCopy := cdnName
+	//	pool.JobQueue <- func() {
+	//		testResult := testOneCdn(cdnAddressCopy, cdnNameCopy, validateInfoList)
+	//		testResultsMu.Lock()
+	//		testResults = append(testResults, testResult)
+	//		testResultsMu.Unlock()
+	//		pool.JobDone()
+	//	}
+	//}
+	//pool.WaitAll()
+	//
+	//sort.Sort(testResults)
+	//err = testResults.save()
+	//if err != nil {
+	//	log.Println("WARN:", err)
+	//}
+}
+
+func testAllMirrors(mirrors0 mirrors, validateInfoList []*FileValidateInfo) {
+	if optNoTestHidden {
+		var tempMirrors mirrors
+		for _, mirror := range mirrors0 {
+			if mirror.Weight >= 0 {
+				tempMirrors = append(tempMirrors, mirror)
+			}
+		}
+		mirrors0 = tempMirrors
+	}
+
+	pool := grpool.NewPool(50, 1)
 	defer pool.Release()
+	pool.WaitCount(len(mirrors0))
 
-	var testResults cdnTestResultSlice
-	var testResultsMu sync.Mutex
+	t0 := time.Now()
+	finishCount := 0
+	var testResults []*testResult
+	var mu sync.Mutex
 
-	pool.WaitCount(len(cdnAddresses))
-	for cdnAddress, cdnName := range cdnAddresses {
-		cdnAddressCopy := cdnAddress
-		cdnNameCopy := cdnName
+	for _, mirror := range mirrors0 {
+		mirrorCopy := mirror
 		pool.JobQueue <- func() {
-			testResult := testOneCdn(cdnAddressCopy, cdnNameCopy, validateInfoList)
-			testResultsMu.Lock()
+			t1 := time.Now()
+			testResult := testOne(mirrorCopy.Id, mirrorCopy.getUrlPrefix(), validateInfoList)
+			duration0 := time.Since(t0)
+			duration1 := time.Since(t1)
+
+			mu.Lock()
+			finishCount++
+			log.Printf("[%d/%d] finish test for mirror %q, takes %v,"+
+				" since the beginning of the test %v",
+				finishCount, len(mirrors0), mirrorCopy.Id, duration1, duration0)
 			testResults = append(testResults, testResult)
-			testResultsMu.Unlock()
+			mu.Unlock()
 			pool.JobDone()
 		}
 	}
 	pool.WaitAll()
 
-	sort.Sort(testResults)
-	err = testResults.save()
+	pushAllMirrorsTestResults(testResults)
+}
+
+func pushAllMirrorsTestResults(testResults []*testResult) {
+	dbUser := os.Getenv("INFLUX_USER")
+	if dbUser == "" {
+		log.Fatal("no set env INFLUX_USER")
+	}
+
+	dbPassword := os.Getenv("INFLUX_PASSWD")
+	if dbPassword == "" {
+		log.Fatal("no set env INFLUX_PASSWD")
+	}
+
+	dbName := "mirror_status"
+	client, err := NewInfluxClient(optInfluxdbAddr, dbUser, dbPassword, dbName)
 	if err != nil {
-		log.Println("WARN:", err)
+		log.Fatal(err)
+	}
+	var items []dbTestResultItem
+	for _, testResult := range testResults {
+		if testResult.urlPrefix == "" {
+			continue
+		}
+
+		items = append(items, dbTestResultItem{
+			Name:     testResult.urlPrefix,
+			Progress: testResult.percent / 100.0,
+		})
+	}
+	err = pushMirrorStatus(client, items, time.Now())
+	if err != nil {
+		log.Fatal(err)
 	}
 }
 
-func checkFile(fileInfo fileInfo) (*FileValidateInfo, error) {
-	//url0 := "http://pools.corp.deepin.com/deepin/" + fileInfo.FilePath
-	//url0 := "http://server-04/deepin/" + fileInfo.FilePath
-	url0 := "http://packages.deepin.com/deepin/" + fileInfo.FilePath
-	log.Println("checkFile", url0)
+func checkFile(urlPrefix string, filePath string) (*FileValidateInfo, error) {
+	if !strings.HasSuffix(urlPrefix, "/") {
+		urlPrefix += "/"
+	}
 
+	url0 := urlPrefix + filePath
+	log.Println("checkFile:", url0)
 	req, err := http.NewRequest(http.MethodGet, url0, nil)
 	if err != nil {
 		log.Println("WARN:", err)
 		return nil, err
 	}
-	return checkFileReq(fileInfo.FilePath, req)
+	return checkFileReq(filePath, req)
 }
 
 func checkFileCdn(fileInfo fileInfo, cdnIp string) (*FileValidateInfo, error) {
@@ -409,14 +628,14 @@ func checkFileCdn(fileInfo fileInfo, cdnIp string) (*FileValidateInfo, error) {
 	}
 	req.Host = "cdn.packages.deepin.com"
 	vi, err := checkFileReq(fileInfo.FilePath, req)
-	//if err != nil {
-	//	log.Printf("checkFileReq error %#v\n", err)
-	//}
 	return vi, err
 }
 
 func parseContentRange(str string) (posBegin, posEnd, total int, err error) {
 	_, err = fmt.Sscanf(str, "bytes %d-%d/%d", &posBegin, &posEnd, &total)
+	if err != nil {
+		err = fmt.Errorf("parseContentRange: %q error %s", str, err.Error())
+	}
 	return
 }
 
@@ -434,7 +653,45 @@ func (vi *FileValidateInfo) equal(other *FileValidateInfo) bool {
 		bytes.Equal(vi.MD5Sum, other.MD5Sum)
 }
 
-func checkFileReq(filePath string, req *http.Request) (*FileValidateInfo, error) {
+func checkFileReq(filePath string, req *http.Request) (vi *FileValidateInfo, err error) {
+	retry := func() {
+		log.Println("retry", req.URL)
+		time.Sleep(3 * time.Second)
+	}
+loop0:
+	for i := 0; i < maxNumOfRetries+1; i++ {
+		vi, err = checkFileReq0(filePath, req)
+
+		if err != nil {
+			errMsg := err.Error()
+
+			allowRetryErrMessages := []string{
+				"connection reset by peer",
+				"Client.Timeout exceeded while reading body",
+				"network is unreachable",
+				"TLS handshake timeout",
+				"i/o timeout",
+				"connection refused",
+			}
+
+			for _, msg := range allowRetryErrMessages {
+				if strings.Contains(errMsg, msg) {
+					retry()
+					continue loop0
+				}
+			}
+			return
+		}
+		if i > 0 {
+			log.Println("retry success", i+1, req.URL)
+		}
+		return
+	}
+	log.Println("maximum retry times exceeded", req.URL)
+	return
+}
+
+func checkFileReq0(filePath string, req *http.Request) (*FileValidateInfo, error) {
 	size := 4 * 1024
 	// 第一次请求
 	req.Header.Set("Range", "bytes=0-"+strconv.Itoa(size-1))
@@ -445,6 +702,11 @@ func checkFileReq(filePath string, req *http.Request) (*FileValidateInfo, error)
 	}
 
 	defer resp.Body.Close()
+
+	code := resp.StatusCode / 100
+	if code != 2 {
+		return nil, fmt.Errorf("response status is %s", resp.Status)
+	}
 
 	modTime := resp.Header.Get("Last-Modified")
 	contentRange := resp.Header.Get("Content-Range")
@@ -503,11 +765,6 @@ func checkFileReq(filePath string, req *http.Request) (*FileValidateInfo, error)
 	}
 
 	defer resp.Body.Close()
-
-	modTime2 := resp.Header.Get("Last-Modified")
-	if modTime != modTime2 {
-		return nil, errors.New("mod time changed")
-	}
 
 	contentRange = resp.Header.Get("Content-Range")
 	posStart2, postEnd2, total2, err2 := parseContentRange(contentRange)
