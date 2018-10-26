@@ -448,16 +448,16 @@ func main() {
 		http.DefaultClient.Transport = &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
 			DialContext: (&net.Dialer{
-				Timeout:   360 * time.Second,
+				Timeout:   120 * time.Second,
 				KeepAlive: 60 * time.Second,
 				DualStack: true,
 			}).DialContext,
 			MaxIdleConns:          100,
-			IdleConnTimeout:       360 * time.Second,
+			IdleConnTimeout:       120 * time.Second,
 			TLSHandshakeTimeout:   60 * time.Second,
 			ExpectContinueTimeout: 1 * time.Second,
 		}
-		http.DefaultClient.Timeout = 10 * time.Minute
+		http.DefaultClient.Timeout = 3 * time.Minute
 		maxNumOfRetries = 6
 	}
 
@@ -683,6 +683,7 @@ loop0:
 				"TLS handshake timeout",
 				"i/o timeout",
 				"connection refused",
+				"connection timed out",
 			}
 
 			errMsg := err.Error()
