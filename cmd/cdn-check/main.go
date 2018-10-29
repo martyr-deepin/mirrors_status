@@ -16,11 +16,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/ivpusic/grpool"
 )
 
@@ -114,8 +116,9 @@ func getValidateInfoList(changeInfo *changeInfo) ([]*FileValidateInfo, error) {
 		return validateInfoList, nil
 	}
 
+	client := getHttpClient(9999)
 	for _, added := range changeInfo.Added {
-		vi, err := checkFile("http://packages.deepin.com/deepin/", added.FilePath, true)
+		vi, err := checkFile("http://packages.deepin.com/deepin/", added.FilePath, true, client)
 		if err != nil {
 			continue
 		}
@@ -188,6 +191,7 @@ func (tr *testResult) save() error {
 		fmt.Fprintln(bw, "file path:", record.standard.FilePath)
 		fmt.Fprintln(bw, "standard url:", record.standard.URL)
 		fmt.Fprintln(bw, "err:", record.err)
+		fmt.Fprintln(bw, "errDump:", spew.Sdump(record.err))
 		fmt.Fprintln(bw)
 	}
 
@@ -308,18 +312,20 @@ func testOne(mirrorId string, urlPrefix string, mirrorWeight int,
 		}
 	}
 
-	pool := grpool.NewPool(3, 1)
+	pool := grpool.NewPool(6, 1)
 	defer pool.Release()
 	var mu sync.Mutex
 	records := make([]testRecord, 0, len(validateInfoList))
 	var good int
 	var numErrs int
 
+	client := getHttpClient(mirrorWeight)
+
 	pool.WaitCount(len(validateInfoList))
 	for _, validateInfo := range validateInfoList {
 		vi := validateInfo
 		pool.JobQueue <- func() {
-			validateInfo1, err := checkFile(urlPrefix, vi.FilePath, mirrorWeight >= 0)
+			validateInfo1, err := checkFile(urlPrefix, vi.FilePath, mirrorWeight >= 0, client)
 
 			var record testRecord
 			record.standard = vi
@@ -369,13 +375,15 @@ func testOneCdn(cdnAddress, cdnName string, validateInfoList []*FileValidateInfo
 	var good int
 	var numErrs int
 
+	client := getHttpClient(1000)
+
 	pool.WaitCount(len(validateInfoList))
 	for _, validateInfo := range validateInfoList {
 		vi := validateInfo
 		pool.JobQueue <- func() {
 			validateInfo1, err := checkFileCdn(fileInfo{
 				FilePath: vi.FilePath,
-			}, cdnAddress)
+			}, cdnAddress, client)
 
 			var record testRecord
 			record.standard = vi
@@ -426,43 +434,76 @@ func makeResultDir() error {
 	return nil
 }
 
+var clientNormal *http.Client
+var clientHidden *http.Client
+
+func getHttpClient(mirrorWeight int) *http.Client {
+	if mirrorWeight >= 0 {
+		return clientNormal
+	}
+	return clientHidden
+}
+
 func main() {
 	flag.Parse()
 	log.SetFlags(log.Lshortfile)
 
 	tlsCfg := &tls.Config{InsecureSkipVerify: true}
 	if optDevEnv {
-		http.DefaultClient.Transport = &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-			DialContext: (&net.Dialer{
-				Timeout:   60 * time.Second,
-				KeepAlive: 60 * time.Second,
-				DualStack: true,
-			}).DialContext,
-			MaxIdleConns:          100,
-			IdleConnTimeout:       60 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
-			TLSClientConfig:       tlsCfg,
+		clientNormal = &http.Client{
+			Transport: &http.Transport{
+				Proxy: http.ProxyFromEnvironment,
+				DialContext: (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+					DualStack: true,
+				}).DialContext,
+				MaxIdleConns:          100,
+				IdleConnTimeout:       90 * time.Second,
+				TLSHandshakeTimeout:   10 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+				TLSClientConfig:       tlsCfg,
+			},
+			Timeout: 1 * time.Minute,
 		}
-		http.DefaultClient.Timeout = 1 * time.Minute
-		maxNumOfRetries = 3
+
+		clientHidden = clientNormal
+		maxNumOfRetries = 2
 	} else {
-		http.DefaultClient.Transport = &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-			DialContext: (&net.Dialer{
-				Timeout:   120 * time.Second,
-				KeepAlive: 60 * time.Second,
-				DualStack: true,
-			}).DialContext,
-			MaxIdleConns:          100,
-			IdleConnTimeout:       120 * time.Second,
-			TLSHandshakeTimeout:   60 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
-			TLSClientConfig:       tlsCfg,
+		clientNormal = &http.Client{
+			Transport: &http.Transport{
+				Proxy: http.ProxyFromEnvironment,
+				DialContext: (&net.Dialer{
+					Timeout:   60 * time.Second,
+					KeepAlive: 60 * time.Second,
+					DualStack: true,
+				}).DialContext,
+				MaxIdleConns:          100,
+				IdleConnTimeout:       120 * time.Second,
+				TLSHandshakeTimeout:   20 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+				TLSClientConfig:       tlsCfg,
+			},
+			Timeout: 3 * time.Minute,
 		}
-		http.DefaultClient.Timeout = 3 * time.Minute
-		maxNumOfRetries = 6
+
+		clientHidden = &http.Client{
+			Transport: &http.Transport{
+				Proxy: http.ProxyFromEnvironment,
+				DialContext: (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+					DualStack: true,
+				}).DialContext,
+				MaxIdleConns:          100,
+				IdleConnTimeout:       90 * time.Second,
+				TLSHandshakeTimeout:   10 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+				TLSClientConfig:       tlsCfg,
+			},
+			Timeout: 1 * time.Minute,
+		}
+		maxNumOfRetries = 4
 	}
 
 	mirrorsUrl := "http://server-12:8900/v1/mirrors"
@@ -610,7 +651,8 @@ func pushAllMirrorsTestResults(testResults []*testResult) {
 	}
 }
 
-func checkFile(urlPrefix string, filePath string, allowRetry bool) (*FileValidateInfo, error) {
+func checkFile(urlPrefix string, filePath string, allowRetry bool,
+	client *http.Client) (*FileValidateInfo, error) {
 	if !strings.HasSuffix(urlPrefix, "/") {
 		urlPrefix += "/"
 	}
@@ -622,10 +664,10 @@ func checkFile(urlPrefix string, filePath string, allowRetry bool) (*FileValidat
 		log.Println("WARN:", err)
 		return nil, err
 	}
-	return checkFileReq(filePath, req, allowRetry)
+	return checkFileReq(filePath, req, allowRetry, client)
 }
 
-func checkFileCdn(fileInfo fileInfo, cdnIp string) (*FileValidateInfo, error) {
+func checkFileCdn(fileInfo fileInfo, cdnIp string, client *http.Client) (*FileValidateInfo, error) {
 	url0 := "http://" + cdnIp + "/deepin/" + fileInfo.FilePath
 	log.Println("checkFileCdn:", url0)
 	req, err := http.NewRequest(http.MethodGet, url0, nil)
@@ -634,7 +676,7 @@ func checkFileCdn(fileInfo fileInfo, cdnIp string) (*FileValidateInfo, error) {
 		return nil, err
 	}
 	req.Host = "cdn.packages.deepin.com"
-	vi, err := checkFileReq(fileInfo.FilePath, req, true)
+	vi, err := checkFileReq(fileInfo.FilePath, req, true, client)
 	return vi, err
 }
 
@@ -660,10 +702,11 @@ func (vi *FileValidateInfo) equal(other *FileValidateInfo) bool {
 		bytes.Equal(vi.MD5Sum, other.MD5Sum)
 }
 
-func checkFileReq(filePath string, req *http.Request, allowRetry bool) (vi *FileValidateInfo,
-	err error) {
-	retry := func() {
-		log.Println("retry", req.URL)
+var regErrLookupTimeout = regexp.MustCompile("lookup.*on.*read udp.*i/o timeout")
+
+func checkFileReq(filePath string, req *http.Request, allowRetry bool,
+	client *http.Client) (vi *FileValidateInfo, err error) {
+	retryDelay := func() {
 		time.Sleep(3 * time.Second)
 	}
 	n := 1
@@ -673,9 +716,14 @@ func checkFileReq(filePath string, req *http.Request, allowRetry bool) (vi *File
 
 loop0:
 	for i := 0; i < n; i++ {
-		vi, err = checkFileReq0(filePath, req)
+		if i > 0 {
+			log.Println("retry", i, req.URL)
+		}
+
+		vi, err = checkFileReq0(filePath, req, client)
 
 		if err != nil {
+			log.Printf("WARN: url: %s, err: %v\n", req.URL, err)
 			if !allowRetry {
 				return
 			}
@@ -685,22 +733,28 @@ loop0:
 				"Client.Timeout exceeded while reading body",
 				"network is unreachable",
 				"TLS handshake timeout",
-				"i/o timeout",
 				"connection refused",
 				"connection timed out",
+				"Service Temporarily Unavailable",
+				"Internal Server Error",
 			}
 
 			errMsg := err.Error()
 			for _, msg := range allowRetryErrMessages {
 				if strings.Contains(errMsg, msg) {
-					retry()
+					retryDelay()
 					continue loop0
 				}
+			}
+
+			if regErrLookupTimeout.MatchString(errMsg) {
+				retryDelay()
+				continue loop0
 			}
 			return
 		}
 		if i > 0 {
-			log.Println("retry success", i+1, req.URL)
+			log.Println("retry success", i, req.URL)
 		}
 		return
 	}
@@ -708,13 +762,12 @@ loop0:
 	return
 }
 
-func checkFileReq0(filePath string, req *http.Request) (*FileValidateInfo, error) {
+func checkFileReq0(filePath string, req *http.Request, client *http.Client) (*FileValidateInfo, error) {
 	size := 4 * 1024
 	// 第一次请求
 	req.Header.Set("Range", "bytes=0-"+strconv.Itoa(size-1))
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
-		log.Println("WARN:", err)
 		return nil, err
 	}
 
@@ -729,12 +782,10 @@ func checkFileReq0(filePath string, req *http.Request) (*FileValidateInfo, error
 	contentRange := resp.Header.Get("Content-Range")
 	posStart, postEnd, total, err := parseContentRange(contentRange)
 	if err != nil {
-		log.Println("WARN:", err)
 		return nil, err
 	}
 
 	if posStart != 0 {
-		log.Println("WARN: posStart != 0")
 		return nil, errors.New("posStart != 0")
 	}
 
@@ -742,18 +793,15 @@ func checkFileReq0(filePath string, req *http.Request) (*FileValidateInfo, error
 	n, err := io.ReadFull(resp.Body, buf)
 	if err == io.ErrUnexpectedEOF {
 		if n != postEnd+1 {
-			log.Println("WARN: unexpectedEOF")
 			return nil, err
 		}
 	} else if err != nil {
-		log.Println("WARN:", err)
 		return nil, err
 	}
 
 	md5hash := md5.New()
 	_, err = md5hash.Write(buf[:n])
 	if err != nil {
-		log.Println("WARN:", err)
 		return nil, err
 	}
 	vi := &FileValidateInfo{
@@ -775,9 +823,8 @@ func checkFileReq0(filePath string, req *http.Request) (*FileValidateInfo, error
 
 	// 第二次请求
 	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", secondPosBegin, total-1))
-	resp, err = http.DefaultClient.Do(req)
+	resp, err = client.Do(req)
 	if err != nil {
-		log.Println("WARN:", err)
 		return nil, err
 	}
 
@@ -786,19 +833,15 @@ func checkFileReq0(filePath string, req *http.Request) (*FileValidateInfo, error
 	contentRange = resp.Header.Get("Content-Range")
 	posStart2, postEnd2, total2, err2 := parseContentRange(contentRange)
 	if err2 != nil {
-		log.Println("WARN:", err2)
 		return nil, err2
 	}
 	if posStart2 != secondPosBegin {
-		log.Println("WARN: 2rd req posStart not match")
 		return nil, errors.New("2rd req posStart not match")
 	}
 	if postEnd2 != total-1 {
-		log.Println("WARN: 2rd req posEnd not match")
 		return nil, errors.New("2rd req posEnd not match")
 	}
 	if total != total2 {
-		log.Println("WARN: total not match")
 		return nil, errors.New("total not match")
 	}
 
@@ -811,13 +854,11 @@ func checkFileReq0(filePath string, req *http.Request) (*FileValidateInfo, error
 
 	_, err = io.ReadFull(resp.Body, buf2)
 	if err != nil {
-		log.Println("WARN:", err)
 		return nil, err
 	}
 
 	_, err = md5hash.Write(buf2)
 	if err != nil {
-		log.Println("WARN:", err)
 		return nil, err
 	}
 
