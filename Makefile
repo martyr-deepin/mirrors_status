@@ -16,7 +16,7 @@ docker_image: bin docker_image0
 docker_image0:
 	docker build -t hub.deepin.io/deepin/mirrors_status:0.0.1 .
 
-jenkins_dock_image: jenkins_bin
+jenkins_docker_image: jenkins_bin
 	if [ -z "$(DOCKER_IMAGE_NAME)" ]; then exit 1; fi
 	if [ -z "$(DOCKER_IMAGE_TAG)" ]; then exit 1; fi
 	docker build -t $(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG) .
