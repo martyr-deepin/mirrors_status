@@ -12,11 +12,14 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -137,7 +140,6 @@ type testResult struct {
 	name           string
 	urlPrefix      string
 	cdnNodeAddress string
-	cdnNodeName    string
 	records        []testRecord
 	percent        float64
 	numErrs        int
@@ -153,8 +155,7 @@ func (tr *testResult) save() error {
 	if tr.cdnNodeAddress == "" {
 		filename = tr.name + ".txt"
 	} else {
-		filename = fmt.Sprintf("%s-%s-%s.txt", tr.name, tr.cdnNodeAddress,
-			tr.cdnNodeName)
+		filename = fmt.Sprintf("%s-%s.txt", tr.name, tr.cdnNodeAddress)
 	}
 	filename = filepath.Join("result", filename)
 	f, err := os.Create(filename)
@@ -169,7 +170,6 @@ func (tr *testResult) save() error {
 
 	if tr.cdnNodeAddress != "" {
 		fmt.Fprintln(bw, "cdn node address:", tr.cdnNodeAddress)
-		fmt.Fprintln(bw, "cdn node name:", tr.cdnNodeName)
 	}
 	fmt.Fprintf(bw, "percent: %.3f%%\n", tr.percent)
 	if tr.percent == 100 {
@@ -261,38 +261,38 @@ func (v cdnTestResultSlice) Swap(i, j int) {
 	v[i], v[j] = v[j], v[i]
 }
 
-func (v cdnTestResultSlice) save() error {
-	if len(v) == 0 {
-		return nil
-	}
-
-	err := makeResultDir()
-	if err != nil {
-		return err
-	}
-
-	f, err := os.Create("result/summary")
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	bw := bufio.NewWriter(f)
-
-	for _, testResult := range v {
-		const summaryFmt = "%s (%s) %.3f%% %d\n"
-		log.Printf(summaryFmt, testResult.cdnNodeAddress,
-			testResult.cdnNodeName, testResult.percent, testResult.numErrs)
-		fmt.Fprintf(bw, summaryFmt, testResult.cdnNodeAddress,
-			testResult.cdnNodeName, testResult.percent, testResult.numErrs)
-	}
-
-	err = bw.Flush()
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
+//func (v cdnTestResultSlice) save() error {
+//	if len(v) == 0 {
+//		return nil
+//	}
+//
+//	err := makeResultDir()
+//	if err != nil {
+//		return err
+//	}
+//
+//	f, err := os.Create("result/summary")
+//	if err != nil {
+//		return err
+//	}
+//	defer f.Close()
+//	bw := bufio.NewWriter(f)
+//
+//	for _, testResult := range v {
+//		const summaryFmt = "%s (%s) %.3f%% %d\n"
+//		log.Printf(summaryFmt, testResult.cdnNodeAddress,
+//			testResult.cdnNodeName, testResult.percent, testResult.numErrs)
+//		fmt.Fprintf(bw, summaryFmt, testResult.cdnNodeAddress,
+//			testResult.cdnNodeName, testResult.percent, testResult.numErrs)
+//	}
+//
+//	err = bw.Flush()
+//	if err != nil {
+//		return err
+//	}
+//
+//	return nil
+//}
 
 type testRecord struct {
 	standard *FileValidateInfo
@@ -301,11 +301,8 @@ type testRecord struct {
 	err      error
 }
 
-func testOne(mirrorId string, urlPrefix string, mirrorWeight int,
+func testOne(mirrorId, urlPrefix string, mirrorWeight int,
 	validateInfoList []*FileValidateInfo) *testResult {
-	log.Printf("start test mirror %q, urlPrefix: %q, weight %d\n",
-		mirrorId, urlPrefix, mirrorWeight)
-
 	if urlPrefix == "" {
 		return &testResult{
 			name: mirrorId,
@@ -315,13 +312,16 @@ func testOne(mirrorId string, urlPrefix string, mirrorWeight int,
 	pool := grpool.NewPool(6, 1)
 	defer pool.Release()
 	var mu sync.Mutex
-	records := make([]testRecord, 0, len(validateInfoList))
+	numTotal := len(validateInfoList)
+	records := make([]testRecord, 0, numTotal)
 	var good int
 	var numErrs int
+	var numCompleted int
 
 	client := getHttpClient(mirrorWeight)
 
-	pool.WaitCount(len(validateInfoList))
+	pool.WaitCount(numTotal)
+
 	for _, validateInfo := range validateInfoList {
 		vi := validateInfo
 		pool.JobQueue <- func() {
@@ -330,6 +330,8 @@ func testOne(mirrorId string, urlPrefix string, mirrorWeight int,
 			var record testRecord
 			record.standard = vi
 			mu.Lock()
+			numCompleted++
+			log.Printf("[%d/%d] mirror %s\n", numCompleted, numTotal, mirrorId)
 			if err != nil {
 				numErrs++
 				log.Println("WARN:", err)
@@ -367,7 +369,54 @@ func testOne(mirrorId string, urlPrefix string, mirrorWeight int,
 	return r
 }
 
-func testOneCdn(cdnAddress, cdnName string, validateInfoList []*FileValidateInfo) *testResult {
+func testMirror(mirrorId string, urlPrefix string, mirrorWeight int,
+	validateInfoList []*FileValidateInfo) *testResult {
+	log.Printf("start test mirror %q, urlPrefix: %q, weight %d\n",
+		mirrorId, urlPrefix, mirrorWeight)
+
+	if mirrorId == "default" {
+		// is cdn
+		u, err := url.Parse(urlPrefix)
+		if err != nil {
+			panic(err)
+		}
+
+		ips, err := testDNS(u.Hostname())
+		if err != nil {
+			log.Println("WARN: testDNS err:", err)
+		}
+
+		if len(ips) == 0 {
+			return nil
+		}
+
+		pool := grpool.NewPool(len(ips), 1)
+		defer pool.Release()
+
+		var testResults cdnTestResultSlice
+		var testResultsMu sync.Mutex
+
+		pool.WaitCount(len(ips))
+		for _, cdnAddress := range ips {
+			cdnAddressCopy := cdnAddress
+			pool.JobQueue <- func() {
+				testResult := testOneCdn(mirrorId, cdnAddressCopy, validateInfoList)
+				testResultsMu.Lock()
+				testResults = append(testResults, testResult)
+				testResultsMu.Unlock()
+				pool.JobDone()
+			}
+		}
+		pool.WaitAll()
+
+		sort.Sort(testResults)
+		return testResults[0]
+	}
+	r := testOne(mirrorId, urlPrefix, mirrorWeight, validateInfoList)
+	return r
+}
+
+func testOneCdn(mirrorId, cdnNodeAddress string, validateInfoList []*FileValidateInfo) *testResult {
 	pool := grpool.NewPool(3, 1)
 	defer pool.Release()
 	var mu sync.Mutex
@@ -383,7 +432,7 @@ func testOneCdn(cdnAddress, cdnName string, validateInfoList []*FileValidateInfo
 		pool.JobQueue <- func() {
 			validateInfo1, err := checkFileCdn(fileInfo{
 				FilePath: vi.FilePath,
-			}, cdnAddress, client)
+			}, cdnNodeAddress, client)
 
 			var record testRecord
 			record.standard = vi
@@ -411,8 +460,8 @@ func testOneCdn(cdnAddress, cdnName string, validateInfoList []*FileValidateInfo
 	percent := float64(good) / float64(len(validateInfoList)) * 100.0
 
 	r := &testResult{
-		cdnNodeAddress: cdnAddress,
-		cdnNodeName:    cdnName,
+		name:           mirrorId,
+		cdnNodeAddress: cdnNodeAddress,
 		records:        records,
 		percent:        percent,
 		numErrs:        numErrs,
@@ -522,6 +571,8 @@ func main() {
 		log.Fatal(err)
 	}
 
+	rand.Seed(time.Now().UnixNano())
+
 	if optMirror == "" {
 		testAllMirrors(mirrors, validateInfoList)
 	} else {
@@ -536,7 +587,7 @@ func main() {
 			log.Fatal("not found mirror " + optMirror)
 		}
 
-		testOne(mirror0.Id, mirror0.getUrlPrefix(), mirror0.Weight, validateInfoList)
+		testMirror(mirror0.Id, mirror0.getUrlPrefix(), mirror0.Weight, validateInfoList)
 	}
 
 	//cdnAddresses := map[string]string{
@@ -598,7 +649,7 @@ func testAllMirrors(mirrors0 mirrors, validateInfoList []*FileValidateInfo) {
 		mirrorCopy := mirror
 		pool.JobQueue <- func() {
 			t1 := time.Now()
-			testResult := testOne(mirrorCopy.Id, mirrorCopy.getUrlPrefix(),
+			testResult := testMirror(mirrorCopy.Id, mirrorCopy.getUrlPrefix(),
 				mirrorCopy.Weight, validateInfoList)
 			duration0 := time.Since(t0)
 			duration1 := time.Since(t1)
@@ -704,10 +755,15 @@ func (vi *FileValidateInfo) equal(other *FileValidateInfo) bool {
 
 var regErrLookupTimeout = regexp.MustCompile("lookup.*on.*read udp.*i/o timeout")
 
+var dialTcpTimeoutMap = make(map[string]int)
+
+var regDialTcpTimeout = regexp.MustCompile(`dial tcp (\S+): i/o timeout`)
+
 func checkFileReq(filePath string, req *http.Request, allowRetry bool,
 	client *http.Client) (vi *FileValidateInfo, err error) {
 	retryDelay := func() {
-		time.Sleep(3 * time.Second)
+		ms := rand.Intn(3000) + 100
+		time.Sleep(time.Duration(ms) * time.Millisecond)
 	}
 	n := 1
 	if allowRetry {
@@ -747,6 +803,17 @@ loop0:
 				}
 			}
 
+			match := regDialTcpTimeout.FindStringSubmatch(errMsg)
+			if len(match) >= 2 {
+				host := match[1]
+				num := dialTcpTimeoutMap[host]
+				if num > 25 {
+					return
+				}
+				dialTcpTimeoutMap[host]++
+				retryDelay()
+				continue loop0
+			}
 			if regErrLookupTimeout.MatchString(errMsg) {
 				retryDelay()
 				continue loop0
