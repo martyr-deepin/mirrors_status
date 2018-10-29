@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/md5"
+	"crypto/tls"
 	"encoding/gob"
 	"encoding/json"
 	"errors"
@@ -429,6 +430,7 @@ func main() {
 	flag.Parse()
 	log.SetFlags(log.Lshortfile)
 
+	tlsCfg := &tls.Config{InsecureSkipVerify: true}
 	if optDevEnv {
 		http.DefaultClient.Transport = &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
@@ -441,6 +443,7 @@ func main() {
 			IdleConnTimeout:       60 * time.Second,
 			TLSHandshakeTimeout:   10 * time.Second,
 			ExpectContinueTimeout: 1 * time.Second,
+			TLSClientConfig:       tlsCfg,
 		}
 		http.DefaultClient.Timeout = 1 * time.Minute
 		maxNumOfRetries = 3
@@ -456,6 +459,7 @@ func main() {
 			IdleConnTimeout:       120 * time.Second,
 			TLSHandshakeTimeout:   60 * time.Second,
 			ExpectContinueTimeout: 1 * time.Second,
+			TLSClientConfig:       tlsCfg,
 		}
 		http.DefaultClient.Timeout = 3 * time.Minute
 		maxNumOfRetries = 6
