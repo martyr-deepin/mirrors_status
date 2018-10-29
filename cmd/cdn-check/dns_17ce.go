@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -66,7 +67,7 @@ func checkUser(url1 string, type0 string) (*checkUserResult, error) {
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := clientNormal.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -150,6 +151,7 @@ func testDNS(host string) ([]string, error) {
 	header := make(http.Header)
 	header.Set("User-Agent", userAgent)
 	header.Set("Origin", "https://www.17ce.com")
+	websocket.DefaultDialer.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	conn, _, err := websocket.DefaultDialer.Dial(url0.String(), header)
 	if err != nil {
 		return nil, err

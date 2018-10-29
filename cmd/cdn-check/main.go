@@ -387,7 +387,9 @@ func testMirror(mirrorId string, urlPrefix string, mirrorWeight int,
 		}
 
 		if len(ips) == 0 {
-			return nil
+			return &testResult{
+				name: mirrorId,
+			}
 		}
 
 		pool := grpool.NewPool(len(ips), 1)
