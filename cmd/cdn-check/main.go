@@ -765,6 +765,7 @@ loop0:
 				"connection timed out",
 				"Service Temporarily Unavailable",
 				"Internal Server Error",
+				"Bad Gateway",
 			}
 
 			errMsg := err.Error()
