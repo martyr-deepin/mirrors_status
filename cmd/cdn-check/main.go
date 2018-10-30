@@ -261,39 +261,6 @@ func (v cdnTestResultSlice) Swap(i, j int) {
 	v[i], v[j] = v[j], v[i]
 }
 
-//func (v cdnTestResultSlice) save() error {
-//	if len(v) == 0 {
-//		return nil
-//	}
-//
-//	err := makeResultDir()
-//	if err != nil {
-//		return err
-//	}
-//
-//	f, err := os.Create("result/summary")
-//	if err != nil {
-//		return err
-//	}
-//	defer f.Close()
-//	bw := bufio.NewWriter(f)
-//
-//	for _, testResult := range v {
-//		const summaryFmt = "%s (%s) %.3f%% %d\n"
-//		log.Printf(summaryFmt, testResult.cdnNodeAddress,
-//			testResult.cdnNodeName, testResult.percent, testResult.numErrs)
-//		fmt.Fprintf(bw, summaryFmt, testResult.cdnNodeAddress,
-//			testResult.cdnNodeName, testResult.percent, testResult.numErrs)
-//	}
-//
-//	err = bw.Flush()
-//	if err != nil {
-//		return err
-//	}
-//
-//	return nil
-//}
-
 type testRecord struct {
 	standard *FileValidateInfo
 	result   *FileValidateInfo
@@ -301,7 +268,7 @@ type testRecord struct {
 	err      error
 }
 
-func testOne(mirrorId, urlPrefix string, mirrorWeight int,
+func testMirrorCommon(mirrorId, urlPrefix string, mirrorWeight int,
 	validateInfoList []*FileValidateInfo) *testResult {
 	if urlPrefix == "" {
 		return &testResult{
@@ -331,7 +298,8 @@ func testOne(mirrorId, urlPrefix string, mirrorWeight int,
 			record.standard = vi
 			mu.Lock()
 			numCompleted++
-			log.Printf("[%d/%d] mirror %s\n", numCompleted, numTotal, mirrorId)
+			log.Printf("%s %s [%d/%d]\n", getMirrorsTestProgressDesc(),
+				mirrorId, numCompleted, numTotal)
 			if err != nil {
 				numErrs++
 				log.Println("WARN:", err)
@@ -369,56 +337,63 @@ func testOne(mirrorId, urlPrefix string, mirrorWeight int,
 	return r
 }
 
+func testMirrorCdn(mirrorId, urlPrefix string,
+	validateInfoList []*FileValidateInfo) []*testResult {
+	u, err := url.Parse(urlPrefix)
+	if err != nil {
+		panic(err)
+	}
+
+	ips, err := testDNS(u.Hostname())
+	if err != nil {
+		log.Println("WARN: testDNS err:", err)
+	}
+
+	if len(ips) == 0 {
+		return []*testResult{
+			{
+				name: mirrorId,
+			},
+		}
+	}
+
+	pool := grpool.NewPool(len(ips), 1)
+	defer pool.Release()
+
+	var testResults cdnTestResultSlice
+	var testResultsMu sync.Mutex
+
+	pool.WaitCount(len(ips))
+	for _, cdnAddress := range ips {
+		cdnAddressCopy := cdnAddress
+		pool.JobQueue <- func() {
+			testResult := testCdnNode(mirrorId, cdnAddressCopy, validateInfoList)
+			testResultsMu.Lock()
+			testResults = append(testResults, testResult)
+			testResultsMu.Unlock()
+			pool.JobDone()
+		}
+	}
+	pool.WaitAll()
+
+	sort.Sort(testResults)
+	return testResults
+}
+
 func testMirror(mirrorId string, urlPrefix string, mirrorWeight int,
-	validateInfoList []*FileValidateInfo) *testResult {
+	validateInfoList []*FileValidateInfo) []*testResult {
 	log.Printf("start test mirror %q, urlPrefix: %q, weight %d\n",
 		mirrorId, urlPrefix, mirrorWeight)
 
 	if mirrorId == "default" {
 		// is cdn
-		u, err := url.Parse(urlPrefix)
-		if err != nil {
-			panic(err)
-		}
-
-		ips, err := testDNS(u.Hostname())
-		if err != nil {
-			log.Println("WARN: testDNS err:", err)
-		}
-
-		if len(ips) == 0 {
-			return &testResult{
-				name: mirrorId,
-			}
-		}
-
-		pool := grpool.NewPool(len(ips), 1)
-		defer pool.Release()
-
-		var testResults cdnTestResultSlice
-		var testResultsMu sync.Mutex
-
-		pool.WaitCount(len(ips))
-		for _, cdnAddress := range ips {
-			cdnAddressCopy := cdnAddress
-			pool.JobQueue <- func() {
-				testResult := testOneCdn(mirrorId, cdnAddressCopy, validateInfoList)
-				testResultsMu.Lock()
-				testResults = append(testResults, testResult)
-				testResultsMu.Unlock()
-				pool.JobDone()
-			}
-		}
-		pool.WaitAll()
-
-		sort.Sort(testResults)
-		return testResults[0]
+		return testMirrorCdn(mirrorId, urlPrefix, validateInfoList)
 	}
-	r := testOne(mirrorId, urlPrefix, mirrorWeight, validateInfoList)
-	return r
+	r := testMirrorCommon(mirrorId, urlPrefix, mirrorWeight, validateInfoList)
+	return []*testResult{r}
 }
 
-func testOneCdn(mirrorId, cdnNodeAddress string, validateInfoList []*FileValidateInfo) *testResult {
+func testCdnNode(mirrorId, cdnNodeAddress string, validateInfoList []*FileValidateInfo) *testResult {
 	pool := grpool.NewPool(3, 1)
 	defer pool.Release()
 	var mu sync.Mutex
@@ -592,39 +567,23 @@ func main() {
 		testMirror(mirror0.Id, mirror0.getUrlPrefix(), mirror0.Weight, validateInfoList)
 	}
 
-	//cdnAddresses := map[string]string{
-	//	"52.0.26.226":    "美国弗吉尼亚州阿什本  amazon.com",
-	//	"221.130.199.56": "中国上海  移动",
-	//	"36.110.211.9":   "中国北京  电信",
-	//	"1.192.192.70":   "中国河南郑州  电信",
-	//	"42.236.10.34":   "中国河南郑州  联通",
-	//}
-	//
-	//pool := grpool.NewPool(len(cdnAddresses), 1)
-	//defer pool.Release()
-	//
-	//var testResults cdnTestResultSlice
-	//var testResultsMu sync.Mutex
-	//
-	//pool.WaitCount(len(cdnAddresses))
-	//for cdnAddress, cdnName := range cdnAddresses {
-	//	cdnAddressCopy := cdnAddress
-	//	cdnNameCopy := cdnName
-	//	pool.JobQueue <- func() {
-	//		testResult := testOneCdn(cdnAddressCopy, cdnNameCopy, validateInfoList)
-	//		testResultsMu.Lock()
-	//		testResults = append(testResults, testResult)
-	//		testResultsMu.Unlock()
-	//		pool.JobDone()
-	//	}
-	//}
-	//pool.WaitAll()
-	//
-	//sort.Sort(testResults)
-	//err = testResults.save()
-	//if err != nil {
-	//	log.Println("WARN:", err)
-	//}
+}
+
+var numMirrorsTotal int
+var numMirrorsFinished int
+var numMirrorsMu sync.Mutex
+
+func getMirrorsTestProgressDesc() string {
+	numMirrorsMu.Lock()
+	str := fmt.Sprintf("[%d/%d]", numMirrorsFinished, numMirrorsTotal)
+	numMirrorsMu.Unlock()
+	return str
+}
+
+func testMirrorFinish() {
+	numMirrorsMu.Lock()
+	numMirrorsFinished++
+	numMirrorsMu.Unlock()
 }
 
 func testAllMirrors(mirrors0 mirrors, validateInfoList []*FileValidateInfo) {
@@ -642,8 +601,9 @@ func testAllMirrors(mirrors0 mirrors, validateInfoList []*FileValidateInfo) {
 	defer pool.Release()
 	pool.WaitCount(len(mirrors0))
 
+	numMirrorsTotal = len(mirrors0)
+
 	t0 := time.Now()
-	finishCount := 0
 	var testResults []*testResult
 	var mu sync.Mutex
 
@@ -653,15 +613,15 @@ func testAllMirrors(mirrors0 mirrors, validateInfoList []*FileValidateInfo) {
 			t1 := time.Now()
 			testResult := testMirror(mirrorCopy.Id, mirrorCopy.getUrlPrefix(),
 				mirrorCopy.Weight, validateInfoList)
+			testMirrorFinish()
 			duration0 := time.Since(t0)
 			duration1 := time.Since(t1)
 
-			mu.Lock()
-			finishCount++
-			log.Printf("[%d/%d] finish test for mirror %q, takes %v,"+
+			log.Printf("%s finish test for mirror %q, takes %v,"+
 				" since the beginning of the test %v",
-				finishCount, len(mirrors0), mirrorCopy.Id, duration1, duration0)
-			testResults = append(testResults, testResult)
+				getMirrorsTestProgressDesc(), mirrorCopy.Id, duration1, duration0)
+			mu.Lock()
+			testResults = append(testResults, testResult...)
 			mu.Unlock()
 			pool.JobDone()
 		}
@@ -687,21 +647,31 @@ func pushAllMirrorsTestResults(testResults []*testResult) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	var items []dbTestResultItem
+	var mirrorsPoints []mirrorsPoint
+	var mirrorsCdnPoints []mirrorsCdnPoint
 	for _, testResult := range testResults {
-		if testResult.urlPrefix == "" {
-			continue
+		if testResult.cdnNodeAddress == "" {
+			if testResult.urlPrefix != "" {
+				mirrorsPoints = append(mirrorsPoints, mirrorsPoint{
+					Name:     testResult.urlPrefix,
+					Progress: testResult.percent / 100.0,
+				})
+			}
+		} else {
+			mirrorsCdnPoints = append(mirrorsCdnPoints, mirrorsCdnPoint{
+				MirrorId:   testResult.name,
+				NodeIpAddr: testResult.cdnNodeAddress,
+				Progress:   testResult.percent / 100.0,
+			})
 		}
-
-		items = append(items, dbTestResultItem{
-			Name:     testResult.urlPrefix,
-			Progress: testResult.percent / 100.0,
-		})
 	}
-	err = pushMirrorStatus(client, items, time.Now())
+	now := time.Now()
+	err = pushToMirrors(client, mirrorsPoints, now)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	err = pushToMirrorsCdn(client, mirrorsCdnPoints, now)
 }
 
 func checkFile(urlPrefix string, filePath string, allowRetry bool,

@@ -46,29 +46,57 @@ func NewInfluxClient(addr string, user string, passwd string, dbname string) (*I
 	return &InfluxClient{c, dbname}, err
 }
 
-func pushMirrorStatus(c *InfluxClient, vs []dbTestResultItem, ts time.Time) error {
-	var data []*client.Point
-	for _, v := range vs {
-		p, err := client.NewPoint(
+func pushToMirrors(c *InfluxClient, points []mirrorsPoint, t time.Time) error {
+	var cPoints []*client.Point
+	for _, p := range points {
+		point, err := client.NewPoint(
 			"mirrors",
 			map[string]string{
-				"name": v.Name,
+				"name": p.Name,
 			},
 			map[string]interface{}{
-				"progress": v.Progress,
+				"progress": p.Progress,
 				"latency":  0,
 			},
-			ts)
+			t)
 		if err != nil {
 			panic(err)
 		}
 
-		data = append(data, p)
+		cPoints = append(cPoints, point)
 	}
-	return c.Write(data...)
+	return c.Write(cPoints...)
 }
 
-type dbTestResultItem struct {
+func pushToMirrorsCdn(c *InfluxClient, points []mirrorsCdnPoint, t time.Time) error {
+	var cPoints []*client.Point
+	for _, p := range points {
+		point, err := client.NewPoint(
+			"mirrors_cdn",
+			map[string]string{
+				"mirror_id":    p.MirrorId,
+				"node_ip_addr": p.NodeIpAddr,
+			},
+			map[string]interface{}{
+				"progress": p.Progress,
+			},
+			t)
+		if err != nil {
+			panic(err)
+		}
+
+		cPoints = append(cPoints, point)
+	}
+	return c.Write(cPoints...)
+}
+
+type mirrorsPoint struct {
 	Name     string
 	Progress float64
+}
+
+type mirrorsCdnPoint struct {
+	MirrorId   string
+	NodeIpAddr string
+	Progress   float64
 }
