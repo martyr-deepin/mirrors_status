@@ -728,6 +728,7 @@ func (vi *FileValidateInfo) equal(other *FileValidateInfo) bool {
 var regErrLookupTimeout = regexp.MustCompile("lookup.*on.*read udp.*i/o timeout")
 
 var dialTcpTimeoutMap = make(map[string]int)
+var dialTcpTimeoutMapMu sync.Mutex
 
 var regDialTcpTimeout = regexp.MustCompile(`dial tcp (\S+): i/o timeout`)
 
@@ -779,11 +780,14 @@ loop0:
 			match := regDialTcpTimeout.FindStringSubmatch(errMsg)
 			if len(match) >= 2 {
 				host := match[1]
+				dialTcpTimeoutMapMu.Lock()
 				num := dialTcpTimeoutMap[host]
 				if num > 25 {
+					dialTcpTimeoutMapMu.Unlock()
 					return
 				}
 				dialTcpTimeoutMap[host]++
+				dialTcpTimeoutMapMu.Unlock()
 				retryDelay()
 				continue loop0
 			}

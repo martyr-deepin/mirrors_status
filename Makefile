@@ -2,7 +2,7 @@ BinDir=$(shell pwd)/bin
 
 bin:
 	mkdir -p bin
-	cd cmd/cdn-check; go build -v -o $(BinDir)/cdn-check
+	cd cmd/cdn-check; go build -race -v -o $(BinDir)/cdn-check
 	cd cmd/push_to_influxdb; go build -v -o $(BinDir)/push_to_influxdb
 
 .PHONY: bin
