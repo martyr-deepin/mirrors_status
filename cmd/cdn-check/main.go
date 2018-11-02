@@ -367,7 +367,7 @@ func testMirrorCdn(mirrorId, urlPrefix string,
 	for _, cdnAddress := range ips {
 		cdnAddressCopy := cdnAddress
 		pool.JobQueue <- func() {
-			testResult := testCdnNode(mirrorId, cdnAddressCopy, validateInfoList)
+			testResult := testCdnNode(mirrorId, urlPrefix, cdnAddressCopy, validateInfoList)
 			testResultsMu.Lock()
 			testResults = append(testResults, testResult)
 			testResultsMu.Unlock()
@@ -393,7 +393,7 @@ func testMirror(mirrorId string, urlPrefix string, mirrorWeight int,
 	return []*testResult{r}
 }
 
-func testCdnNode(mirrorId, cdnNodeAddress string, validateInfoList []*FileValidateInfo) *testResult {
+func testCdnNode(mirrorId, urlPrefix, cdnNodeAddress string, validateInfoList []*FileValidateInfo) *testResult {
 	pool := grpool.NewPool(3, 1)
 	defer pool.Release()
 	var mu sync.Mutex
@@ -438,6 +438,7 @@ func testCdnNode(mirrorId, cdnNodeAddress string, validateInfoList []*FileValida
 
 	r := &testResult{
 		name:           mirrorId,
+		urlPrefix:      urlPrefix,
 		cdnNodeAddress: cdnNodeAddress,
 		records:        records,
 		percent:        percent,
@@ -649,6 +650,8 @@ func pushAllMirrorsTestResults(testResults []*testResult) {
 	}
 	var mirrorsPoints []mirrorsPoint
 	var mirrorsCdnPoints []mirrorsCdnPoint
+
+	var mirrorsPointsAppendedMap = make(map[string]struct{})
 	for _, testResult := range testResults {
 		if testResult.cdnNodeAddress == "" {
 			if testResult.urlPrefix != "" {
@@ -658,6 +661,14 @@ func pushAllMirrorsTestResults(testResults []*testResult) {
 				})
 			}
 		} else {
+			if _, ok := mirrorsPointsAppendedMap[testResult.name]; !ok {
+				mirrorsPoints = append(mirrorsPoints, mirrorsPoint{
+					Name:     testResult.urlPrefix,
+					Progress: testResult.percent / 100.0,
+				})
+				mirrorsPointsAppendedMap[testResult.name] = struct{}{}
+			}
+
 			mirrorsCdnPoints = append(mirrorsCdnPoints, mirrorsCdnPoint{
 				MirrorId:   testResult.name,
 				NodeIpAddr: testResult.cdnNodeAddress,
