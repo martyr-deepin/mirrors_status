@@ -67,7 +67,7 @@ func saveChangeInfo(ci *changeInfo) error {
 	bw := bufio.NewWriter(f)
 
 	fmt.Fprintln(bw, "ts:", ci.Current)
-	fmt.Fprintln(bw, "bw, previous ts:", ci.Preview)
+	fmt.Fprintln(bw, "previous ts:", ci.Preview)
 
 	for _, fileInfo := range ci.Added {
 		_, err = fmt.Fprintf(bw, "A %s\n", fileInfo.FilePath)
@@ -373,6 +373,40 @@ func testMirrorCommon(mirrorId, urlPrefix string, mirrorWeight int,
 	return r
 }
 
+var dnsCache = make(map[string][]string)
+
+func prefetchCdnDns(host string) error {
+	ips, ok := dnsCache[host]
+	if ok {
+		return nil
+	}
+
+	var err error
+	ips, err = testDNS(host)
+	if err != nil {
+		return err
+	}
+
+	dnsCache[host] = ips
+	return nil
+}
+
+func getCdnDns(host string) []string {
+	ips, ok := dnsCache[host]
+	if !ok {
+		if host == "cdn.packages.deepin.com" {
+			return []string{
+				"1.192.192.70",
+				"221.130.199.56",
+				"42.236.10.34",
+				"36.110.211.9",
+				"52.0.26.226",
+			}
+		}
+	}
+	return ips
+}
+
 func testMirrorCdn(mirrorId, urlPrefix string,
 	validateInfoList []*FileValidateInfo) []*testResult {
 	u, err := url.Parse(urlPrefix)
@@ -380,10 +414,8 @@ func testMirrorCdn(mirrorId, urlPrefix string,
 		panic(err)
 	}
 
-	ips, err := testDNS(u.Hostname())
-	if err != nil {
-		log.Println("WARN: testDNS err:", err)
-	}
+	ips := getCdnDns(u.Hostname())
+	log.Printf("testMirrorCdn mirrorId: %s, ips: %v\n", mirrorId, ips)
 
 	if len(ips) == 0 {
 		return []*testResult{
@@ -593,6 +625,10 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 
 	if optMirror == "" {
+		err = prefetchCdnDns("cdn.packages.deepin.com")
+		if err != nil {
+			log.Println("WARN:", err)
+		}
 		testAllMirrors(mirrors, validateInfoList)
 	} else {
 		var mirror0 *mirror
