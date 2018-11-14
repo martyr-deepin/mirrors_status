@@ -54,6 +54,42 @@ type changeInfo struct {
 	Added   []fileInfo `json:"added"`
 }
 
+func saveChangeInfo(ci *changeInfo) error {
+	filename := fmt.Sprintf("result/changeInfo-%s.txt", ci.Current)
+	os.MkdirAll("result", 0755)
+
+	f, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	bw := bufio.NewWriter(f)
+
+	fmt.Fprintln(bw, "ts:", ci.Current)
+	fmt.Fprintln(bw, "bw, previous ts:", ci.Preview)
+
+	for _, fileInfo := range ci.Added {
+		_, err = fmt.Fprintf(bw, "A %s\n", fileInfo.FilePath)
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, fileInfo := range ci.Deleted {
+		_, err = fmt.Fprintf(bw, "D %s\n", fileInfo.FilePath)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = bw.Flush()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 type fileInfo struct {
 	FilePath string `json:"filepath"`
 	FileSize string `json:"filesize"`
@@ -540,6 +576,11 @@ func main() {
 	}
 
 	changeInfo, err := getChangeInfo()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = saveChangeInfo(changeInfo)
 	if err != nil {
 		log.Fatal(err)
 	}
