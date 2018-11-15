@@ -5,8 +5,6 @@ import (
 	"bytes"
 	"crypto/md5"
 	"crypto/tls"
-	"encoding/gob"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -44,8 +42,6 @@ func init() {
 		"http://influxdb.trend.deepin.io:10086", "")
 }
 
-const currentJsonUrl = "http://packages.deepin.com/deepin/changelist/current.json"
-
 type changeInfo struct {
 	Preview string     `json:"preview"` // date type timestamp
 	Current string     `json:"current"` // date type timestamp
@@ -54,121 +50,30 @@ type changeInfo struct {
 	Added   []fileInfo `json:"added"`
 }
 
-func saveChangeInfo(ci *changeInfo) error {
-	filename := fmt.Sprintf("result/changeInfo-%s.txt", ci.Current)
-	os.MkdirAll("result", 0755)
-
-	f, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	bw := bufio.NewWriter(f)
-
-	fmt.Fprintln(bw, "ts:", ci.Current)
-	fmt.Fprintln(bw, "previous ts:", ci.Preview)
-
-	for _, fileInfo := range ci.Added {
-		_, err = fmt.Fprintf(bw, "A %s\n", fileInfo.FilePath)
-		if err != nil {
-			return err
-		}
-	}
-
-	for _, fileInfo := range ci.Deleted {
-		_, err = fmt.Fprintf(bw, "D %s\n", fileInfo.FilePath)
-		if err != nil {
-			return err
-		}
-	}
-
-	err = bw.Flush()
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-type fileInfo struct {
-	FilePath string `json:"filepath"`
-	FileSize string `json:"filesize"`
-}
-
-func getChangeInfo() (*changeInfo, error) {
-	resp, err := http.Get(currentJsonUrl)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	jDec := json.NewDecoder(resp.Body)
-	var v changeInfo
-	err = jDec.Decode(&v)
-	if err != nil {
-		return nil, err
-	}
-	return &v, nil
-}
-
-func saveValidateInfoListGob(l []*FileValidateInfo, filename string) error {
-	f, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	bw := bufio.NewWriter(f)
-	enc := gob.NewEncoder(bw)
-	err = enc.Encode(l)
-	if err != nil {
-		return err
-	}
-
-	err = bw.Flush()
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func loadValidateInfoListGob(filename string) ([]*FileValidateInfo, error) {
-	f, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	br := bufio.NewReader(f)
-	dec := gob.NewDecoder(br)
-	var result []*FileValidateInfo
-	err = dec.Decode(&result)
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
-func getValidateInfoList(changeInfo *changeInfo) ([]*FileValidateInfo, error) {
-	log.Println("current:", changeInfo.Current)
-	filename := changeInfo.Current + ".gob"
-
-	validateInfoList, err := loadValidateInfoListGob(filename)
-	if err == nil {
-		return validateInfoList, nil
-	}
-
+func getValidateInfoList(files []string) ([]*FileValidateInfo, error) {
+	var validateInfoList []*FileValidateInfo
+	var mu sync.Mutex
 	client := getHttpClient(9999)
-	for _, added := range changeInfo.Added {
-		vi, err := checkFile("http://packages.deepin.com/deepin/", added.FilePath, true, client)
-		if err != nil {
-			continue
+	pool := grpool.NewPool(3, 1)
+	defer pool.Release()
+	pool.WaitCount(len(files))
+
+	for _, file := range files {
+		fileCopy := file
+		pool.JobQueue <- func() {
+			defer pool.JobDone()
+
+			vi, err := checkFile(baseUrl, fileCopy, true, client)
+			if err != nil {
+				return
+			}
+			mu.Lock()
+			validateInfoList = append(validateInfoList, vi)
+			mu.Unlock()
 		}
-		validateInfoList = append(validateInfoList, vi)
 	}
 
-	err = saveValidateInfoListGob(validateInfoList, filename)
-	if err != nil {
-		return nil, err
-	}
-
+	pool.WaitAll()
 	return validateInfoList, nil
 }
 
@@ -462,7 +367,7 @@ func testMirror(mirrorId string, urlPrefix string, mirrorWeight int,
 }
 
 func testCdnNode(mirrorId, urlPrefix, cdnNodeAddress string, validateInfoList []*FileValidateInfo) *testResult {
-	pool := grpool.NewPool(3, 1)
+	pool := grpool.NewPool(6, 1)
 	defer pool.Release()
 	var mu sync.Mutex
 	records := make([]testRecord, 0, len(validateInfoList))
@@ -607,17 +512,19 @@ func main() {
 		log.Fatal(err)
 	}
 
-	changeInfo, err := getChangeInfo()
+	changeFiles, err := getChangeFiles()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	err = saveChangeInfo(changeInfo)
-	if err != nil {
-		log.Fatal(err)
+	if len(changeFiles) == 0 {
+		return
 	}
 
-	validateInfoList, err := getValidateInfoList(changeInfo)
+	sort.Strings(changeFiles)
+	saveChangeFiles(changeFiles)
+
+	validateInfoList, err := getValidateInfoList(changeFiles)
 	if err != nil {
 		log.Fatal(err)
 	}

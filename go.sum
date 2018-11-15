@@ -1,3 +1,7 @@
+github.com/PuerkitoBio/goquery v1.4.1 h1:smcIRGdYm/w7JSbcdeLHEMzxmsBQvl8lhf0dSw2nzMI=
+github.com/PuerkitoBio/goquery v1.4.1/go.mod h1:T9ezsOHcCrDCgA8aF1Cqr3sSYbO/xgdy8/R/XiIMAhA=
+github.com/andybalholm/cascadia v1.0.0 h1:hOCXnnZ5A+3eVDX8pvgl4kofXv2ELss0bKcqRySc45o=
+github.com/andybalholm/cascadia v1.0.0/go.mod h1:GsXiBklL0woXo1j/WYWtSYYC4ouU9PqHO0sqidkEA4Y=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/gorilla/websocket v1.4.0 h1:WDFjx/TMzVgy9VdMMQi2K2Emtwi2QcUQsztZ/zLaH/Q=
@@ -6,3 +10,5 @@ github.com/influxdata/influxdb v1.6.3 h1:TioHM/BpNNH25J89jnL2tk45ww8e2CF+3Q/ih0C
 github.com/influxdata/influxdb v1.6.3/go.mod h1:qZna6X/4elxqT3yI9iZYdZrWWdeFOOprn86kgg4+IzY=
 github.com/ivpusic/grpool v0.0.0-20170804092134-28957a27c944 h1:4piUplpVh6FBKTlQpmv9SA0wwvnq05nc+aEu1OSCMRk=
 github.com/ivpusic/grpool v0.0.0-20170804092134-28957a27c944/go.mod h1:WPmiAI5ExAn06vg+0JzyPzXMQutJmpb7TrBtyLJkOHQ=
+golang.org/x/net v0.0.0-20180218175443-cbe0f9307d01 h1:po1f06KS05FvIQQA2pMuOWZAUXiy1KYdIf0ElUU2Hhc=
+golang.org/x/net v0.0.0-20180218175443-cbe0f9307d01/go.mod h1:mL1N/T3taQHkDXs73rZJwtUhF3w3ftmwwsq0BUmARs4=
