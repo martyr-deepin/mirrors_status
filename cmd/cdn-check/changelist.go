@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"sort"
@@ -125,7 +126,8 @@ func getChangeFiles() ([]string, error) {
 		recentlyChanges[i], recentlyChanges[opp] = recentlyChanges[opp], recentlyChanges[i]
 	}
 
-	changeFilesMap := make(map[string]struct{})
+	debChangeFilesMap := make(map[string]struct{})
+	nonDebChangeFilesMap := make(map[string]struct{})
 	var changeFiles []string
 	for _, name := range recentlyChanges {
 		ci, err := getChangeInfo(name)
@@ -135,20 +137,45 @@ func getChangeFiles() ([]string, error) {
 		}
 
 		for _, a := range ci.Added {
-			if !ignoreFile(a.FilePath) {
-				changeFilesMap[a.FilePath] = struct{}{}
+			if ignoreFile(a.FilePath) {
+				continue
 			}
-		}
-		for _, d := range ci.Deleted {
-			if !ignoreFile(d.FilePath) {
-				delete(changeFilesMap, d.FilePath)
+
+			if strings.HasSuffix(a.FilePath, ".deb") {
+				debChangeFilesMap[a.FilePath] = struct{}{}
+			} else {
+				nonDebChangeFilesMap[a.FilePath] = struct{}{}
 			}
 		}
 	}
-	for file := range changeFilesMap {
+	// about 300 deb files selected
+	changeFiles = randSelectN(debChangeFilesMap, 300)
+	for file := range nonDebChangeFilesMap {
 		changeFiles = append(changeFiles, file)
 	}
 	return changeFiles, nil
+}
+
+func randSelectN(in map[string]struct{}, n int) (result []string) {
+	total := len(in)
+
+	if total <= n {
+		var idx int
+		result = make([]string, total)
+		for key := range in {
+			result[idx] = key
+			idx++
+		}
+		return
+	}
+
+	selectedRate := float64(n) / float64(total)
+	for key := range in {
+		if rand.Float64() <= selectedRate {
+			result = append(result, key)
+		}
+	}
+	return
 }
 
 func getChangeInfo(name string) (*changeInfo, error) {
