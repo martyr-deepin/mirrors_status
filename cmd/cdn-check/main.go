@@ -445,6 +445,7 @@ func getHttpClient(mirrorWeight int) *http.Client {
 }
 
 func main() {
+	rand.Seed(time.Now().UnixNano())
 	flag.Parse()
 	log.SetFlags(log.Lshortfile)
 
@@ -522,14 +523,15 @@ func main() {
 	}
 
 	sort.Strings(changeFiles)
-	saveChangeFiles(changeFiles)
+	err = saveChangeFiles(changeFiles)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	validateInfoList, err := getValidateInfoList(changeFiles)
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	rand.Seed(time.Now().UnixNano())
 
 	if optMirror == "" {
 		err = prefetchCdnDns("cdn.packages.deepin.com")
