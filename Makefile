@@ -1,11 +1,15 @@
 BinDir=$(shell pwd)/bin
 
+run:
+	go run cmd/init.go
+
 bin:
 	mkdir -p bin
 	cd cmd/cdn-check; go build -race -v -o $(BinDir)/cdn-check
 	cd cmd/push_to_influxdb; go build -v -o $(BinDir)/push_to_influxdb
+	cd cmd; go build init.go
 
-.PHONY: bin
+.PHONY: bin run
 
 jenkins_bin:
 	if [ -z "$(WORKSPACE)" ]; then exit 1; fi
