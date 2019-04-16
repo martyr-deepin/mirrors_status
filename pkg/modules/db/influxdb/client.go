@@ -2,8 +2,9 @@ package influxdb
 
 import (
 	"fmt"
-	"mirrors_status/cmd/log"
-	"mirrors_status/cmd/modules/model"
+	"mirrors_status/pkg/log"
+	"mirrors_status/pkg/modules/model"
+	"strconv"
 	"time"
 
 	"github.com/influxdata/influxdb/client/v2"
@@ -13,7 +14,7 @@ type Client struct {
 	Username string
 	Password string
 	Host     string
-	Port     string
+	Port     int
 	DbName   string
 
 	c client.Client
@@ -37,7 +38,7 @@ func (c *Client) close() error { return c.c.Close() }
 func (c *Client) NewInfluxClient() (err error) {
 	host := c.Host
 	port := c.Port
-	addr := "http://" + host + ":" + port
+	addr := "http://" + host + ":" + strconv.Itoa(port)
 	dbName := c.DbName
 	username := c.Username
 	password := c.Password
@@ -56,6 +57,7 @@ func (c *Client) NewInfluxClient() (err error) {
 	_, err = c.c.Query(client.Query{
 		Command: fmt.Sprintf("create database %s", dbName),
 	})
+	defer c.c.Close()
 	return
 }
 

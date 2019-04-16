@@ -1,5 +1,7 @@
 .vscode
 bin/
 vendor/*
-configs/*
-.idea/
+config.yml
+.idea
+docs/
+result

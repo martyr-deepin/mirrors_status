@@ -1,16 +1,5 @@
 ## Start
-+ Adjust *config.yml* in configs 
-  ```yaml
-  influxdb:
-       host: 
-       port: 
-       dbName: 
-       username: 
-       password: 
-  http:
-       port: 
-  ``` 
-
++ Rename *configs/config.example.yml* to *configs/config.yml* and modify the configuration
 + Add dependencies
   ```shell
 	 go mod vendor
