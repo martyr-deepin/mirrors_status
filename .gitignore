@@ -2,4 +2,6 @@
 bin/
 vendor/*
 configs/*
-.idea/
+.idea
+docs/
+result

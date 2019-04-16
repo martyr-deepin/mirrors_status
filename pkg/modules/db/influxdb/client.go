@@ -2,8 +2,8 @@ package influxdb
 
 import (
 	"fmt"
-	"mirrors_status/cmd/log"
-	"mirrors_status/cmd/modules/model"
+	"mirrors_status/pkg/log"
+	"mirrors_status/pkg/modules/model"
 	"time"
 
 	"github.com/influxdata/influxdb/client/v2"
@@ -56,6 +56,7 @@ func (c *Client) NewInfluxClient() (err error) {
 	_, err = c.c.Query(client.Query{
 		Command: fmt.Sprintf("create database %s", dbName),
 	})
+	defer c.c.Close()
 	return
 }
 

@@ -1,14 +1,31 @@
 ## Start
 + Adjust *config.yml* in configs 
   ```yaml
-  influxdb:
-       host: 
-       port: 
-       dbName: 
-       username: 
-       password: 
   http:
-       port: 
+    port: 
+  
+  influxdb:
+    host: 
+    port: 
+    dbName: 
+    password:
+    username:
+  
+  mysql:
+    host: 
+    port: 
+    dbName: 
+    username: 
+    password: 
+  
+  cdn-checker:
+    default-cdn: 
+    user-agent: 
+    api-site: 
+    api-path: 
+    target: 
+    source-url: 
+    source-path: 
   ``` 
 
 + Add dependencies
