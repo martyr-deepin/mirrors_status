@@ -1,27 +1,47 @@
 package configs
 
 import (
-	"io/ioutil"
-	"mirrors_status/cmd/log"
-
 	"gopkg.in/yaml.v3"
+	"io/ioutil"
+	"mirrors_status/pkg/log"
 )
 
 type InfluxDBConf struct {
 	Host     string `yaml:"host"`
-	Port     string    `yaml:"port"`
+	Port     int `yaml:"port"`
 	DBName   string `yaml:"dbName"`
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
 }
 
 type HttpConf struct {
-	Port string `yaml:"port"`
+	Port int `yaml:"port"`
+	Host string `yaml:"host"`
+}
+
+type MySQLConf struct {
+	Host     string `yaml:"host"`
+	Port     int `yaml:"port"`
+	DBName   string `yaml:"dbName"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+}
+
+type CdnCheckerConf struct {
+	DefaultCdn string `yaml:"default-cdn"`
+	UserAgent string `yaml:"user-agent"`
+	ApiSite string `yaml:"api-site"`
+	ApiPath string `yaml:"api-path"`
+	Target string `yaml:"target"`
+	SourceUrl string `yaml:"source-url"`
+	SourcePath string `yaml:"source-path"`
 }
 
 type ServerConf struct {
 	InfluxDB *InfluxDBConf `yaml:"influxdb"`
+	MySQLDB *MySQLConf `yaml:"mysql"`
 	Http     *HttpConf     `yaml:"http"`
+	CdnCkecker *CdnCheckerConf `yaml:"cdn-checker"`
 }
 
 func (c *ServerConf) ErrHandler(op string, err error) {

@@ -11,3 +11,7 @@ type MirrorsCdnPoint struct {
 	Progress   float64 `json:"progress"`
 }
 
+type MirrorResponse struct {
+	MirrorsPoint MirrorsPoint `json:"mirrors_point"`
+	MirrorsCdnPoint []MirrorsCdnPoint `json:"cdns"`
+}
