@@ -2,17 +2,21 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
-	"mirrors_status/cmd/config"
 	"mirrors_status/cmd/infrastructure"
-	"mirrors_status/cmd/log"
-	"mirrors_status/cmd/modules/db/influxdb"
-	"mirrors_status/cmd/modules/model"
-	"time"
+	"mirrors_status/pkg/business/cdn-checker"
+	"mirrors_status/pkg/config"
+	"mirrors_status/pkg/log"
+	"mirrors_status/pkg/modules/db/influxdb"
+	"mirrors_status/pkg/modules/db/mysql"
+	"mirrors_status/pkg/modules/model"
+	"mirrors_status/pkg/modules/service"
 )
 
 type App struct {
 	serverConfig *configs.ServerConf
-	client *influxdb.Client
+	influxClient *influxdb.Client
+	mysqlClient *mysql.Client
+	cdnChecker *cdn_checker.CDNChecker
 }
 
 func Init() (app App) {
@@ -23,32 +27,25 @@ func Init() (app App) {
 		serverConfig: serverConfig,
 	}
 
-	InitInfluxDB(*serverConfig)
-	app.client = infrastructure.GetInfluxdbClient()
+	infrastructure.InitDB(*serverConfig)
+	infrastructure.InitCDNCkecker(*app.serverConfig.CdnCkecker)
+	app.influxClient = infrastructure.GetInfluxdbClient()
+	app.mysqlClient = infrastructure.GetMySQLClient()
+	app.cdnChecker = infrastructure.GetCdnChecker()
+
+	infrastructure.InitScheme()
 	return
 }
 
-func InitInfluxDB(config configs.ServerConf) {
-	host := config.InfluxDB.Host
-	port := config.InfluxDB.Port
-	dbName := config.InfluxDB.DBName
-	username := config.InfluxDB.Username
-	password := config.InfluxDB.Password
-	err := infrastructure.InitInfluxdbClient(host, port, dbName, username, password)
-	if err != nil {
-		log.Errorf("Err connecting influxdb:%v", config.InfluxDB)
-	}
-}
-
 func(app App) GetAllMirrors(c *gin.Context) {
-	data, _ := app.client.QueryDB("select * from mirrors")
+	data := service.GetAllMirrors(app.influxClient)
 	c.JSON(200, gin.H{
 		"res": data,
 	})
 }
 
 func(app App) GetAllMirrorsCdn(c *gin.Context) {
-	data, _ := app.client.QueryDB("select * from mirrors_cdn")
+	data := service.GetAllMirrorsCdn(app.influxClient)
 	c.JSON(200, gin.H{
 		"res": data,
 	})
@@ -60,7 +57,7 @@ func (app App) AddMirror(c *gin.Context) {
 	if err != nil {
 		log.Errorf("Bind json found error:%v", err)
 	}
-	err = app.client.PushMirror(time.Now(), reqMirror)
+	err = service.AddMirror(app.influxClient, reqMirror)
 	if err != nil {
 		log.Errorf("Insert data found error:%v", err)
 	}
@@ -75,7 +72,7 @@ func (app App) AddMirrorCdn(c *gin.Context) {
 	if err != nil {
 		log.Errorf("Bind json found error:%v", err)
 	}
-	err = app.client.PushMirrorCdn(time.Now(), reqMirrorCdn)
+	err = service.AddMirrorCdn(app.influxClient, reqMirrorCdn)
 	if err != nil {
 		log.Errorf("Insert data found error:%v", err)
 	}
@@ -85,9 +82,17 @@ func (app App) AddMirrorCdn(c *gin.Context) {
 }
 
 func (app App) TestApi(c *gin.Context) {
-	data, _ := app.client.QueryDB(c.PostForm("query"))
+	query := c.PostForm("query")
+	data := service.TestApi(app.influxClient, query)
 	c.JSON(200, gin.H{
 		"res": data,
+	})
+}
+
+func (app App) CheckTest(c *gin.Context) {
+	app.cdnChecker.Init(app.serverConfig.CdnCkecker)
+	c.JSON(200, gin.H{
+		"res": "success",
 	})
 }
 
@@ -102,5 +107,6 @@ func main() {
 	r.POST("/mirrors_cdn", app.AddMirrorCdn)
 
 	r.POST("/test", app.TestApi)
+	r.GET("/check", app.CheckTest)
 	r.Run(":" + app.serverConfig.Http.Port)
 }
