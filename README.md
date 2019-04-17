@@ -1,4 +1,5 @@
 ## Start
+<<<<<<< HEAD
 + Adjust *config.yml* in configs 
   ```yaml
   http:
@@ -28,6 +29,9 @@
     source-path: 
   ``` 
 
+=======
++ Rename *configs/config.example.yml* to *configs/config.yml* and modify the configuration
+>>>>>>> zhaojuwen/sync-check
 + Add dependencies
   ```shell
 	 go mod vendor

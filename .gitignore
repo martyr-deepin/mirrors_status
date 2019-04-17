@@ -1,7 +1,15 @@
 .vscode
 bin/
+<<<<<<< HEAD
 configs/config.yml
 .idea
 docs/
 result
 /mirrors_status
+=======
+vendor/*
+config.yml
+.idea
+docs/
+result
+>>>>>>> zhaojuwen/sync-check

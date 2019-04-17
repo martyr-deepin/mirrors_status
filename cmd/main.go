@@ -10,6 +10,10 @@ import (
 	"mirrors_status/pkg/modules/db/mysql"
 	"mirrors_status/pkg/modules/model"
 	"mirrors_status/pkg/modules/service"
+<<<<<<< HEAD:cmd/main.go
+=======
+	"strconv"
+>>>>>>> zhaojuwen/sync-check:cmd/main.go
 )
 
 type App struct {
@@ -57,7 +61,11 @@ func (app App) AddMirror(c *gin.Context) {
 	if err != nil {
 		log.Errorf("Bind json found error:%v", err)
 	}
+<<<<<<< HEAD:cmd/main.go
 	err = service.AddMirror(app.influxClient, reqMirror)
+=======
+	err = service.AddMirror(app.mysqlClient, app.influxClient, reqMirror)
+>>>>>>> zhaojuwen/sync-check:cmd/main.go
 	if err != nil {
 		log.Errorf("Insert data found error:%v", err)
 	}
@@ -72,7 +80,11 @@ func (app App) AddMirrorCdn(c *gin.Context) {
 	if err != nil {
 		log.Errorf("Bind json found error:%v", err)
 	}
+<<<<<<< HEAD:cmd/main.go
 	err = service.AddMirrorCdn(app.influxClient, reqMirrorCdn)
+=======
+	err = service.AddMirrorCdn(app.mysqlClient, app.influxClient, reqMirrorCdn)
+>>>>>>> zhaojuwen/sync-check:cmd/main.go
 	if err != nil {
 		log.Errorf("Insert data found error:%v", err)
 	}
@@ -108,5 +120,9 @@ func main() {
 
 	r.POST("/test", app.TestApi)
 	r.GET("/check", app.CheckTest)
+<<<<<<< HEAD:cmd/main.go
 	r.Run(":" + app.serverConfig.Http.Port)
+=======
+	r.Run(":" + strconv.Itoa(app.serverConfig.Http.Port))
+>>>>>>> zhaojuwen/sync-check:cmd/main.go
 }
