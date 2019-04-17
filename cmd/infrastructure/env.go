@@ -26,7 +26,7 @@ func GetCdnChecker() *cdn_checker.CDNChecker {
 	return cdnChecker
 }
 
-func InitInfluxdbClient(host, port, dbname, username, password string) error {
+func InitInfluxdbClient(host string, port int, dbname, username, password string) error {
 	log.Infof("trying connecting influxdb:%s:%s %s %s %s", host, port, dbname, username, password)
 	influxdbClient = &influxdb.Client{
 		Host:     host,
@@ -38,7 +38,7 @@ func InitInfluxdbClient(host, port, dbname, username, password string) error {
 	return influxdbClient.NewInfluxClient()
 }
 
-func InitMySQLClient(host, port, dbname, username, password string) error {
+func InitMySQLClient(host string, port int, dbname, username, password string) error {
 	log.Infof("trying connecting MySQL:%s:%s %s %s %s", host, port, dbname, username, password)
 	mysqlClient = &mysql.Client{
 		Host:     host,

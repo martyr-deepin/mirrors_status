@@ -8,19 +8,20 @@ import (
 
 type InfluxDBConf struct {
 	Host     string `yaml:"host"`
-	Port     string `yaml:"port"`
+	Port     int `yaml:"port"`
 	DBName   string `yaml:"dbName"`
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
 }
 
 type HttpConf struct {
-	Port string `yaml:"port"`
+	Port int `yaml:"port"`
+	Host string `yaml:"host"`
 }
 
 type MySQLConf struct {
 	Host     string `yaml:"host"`
-	Port     string `yaml:"port"`
+	Port     int `yaml:"port"`
 	DBName   string `yaml:"dbName"`
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`

@@ -1,7 +1,8 @@
 .vscode
 bin/
 configs/config.yml
-.idea
-docs/
+/.idea
 result
 /mirrors_status
+config.yml
+result

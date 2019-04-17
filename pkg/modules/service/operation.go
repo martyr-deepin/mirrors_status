@@ -1,12 +1,14 @@
 package service
 
 import (
+	"mirrors_status/pkg/log"
 	"mirrors_status/pkg/modules/db/mysql"
 	"mirrors_status/pkg/modules/model"
 )
 
 func CreateOperation(client *mysql.Client, operation model.MirrorOperation) {
-	client.DB.Create(operation)
+	log.Infof("Inserting operation:%v", operation)
+	client.DB.Create(&operation)
 }
 
 func GetOperationsByUsername(client *mysql.Client, username string) []model.MirrorOperation {

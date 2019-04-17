@@ -4,7 +4,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"github.com/gorilla/websocket"
-	"log"
+	"mirrors_status/pkg/log"
 	"mirrors_status/pkg/config"
 	"net/http"
 	"net/url"
@@ -65,11 +65,9 @@ func (tool *CheckTool) TestDNS(host string) ([]string, error) {
 	}
 
 	user := checkUserResult.Data.User
-	log.Println("user:", user)
 	code := checkUserResult.Data.Code
-	log.Println("code:", code)
 	ut := checkUserResult.Data.Ut
-	log.Println("ut:", ut)
+	log.Infof("User:%s, Code:%s, UT:%d", user, code, ut)
 
 	urlValues := make(url.Values)
 	urlValues.Set("user", user)
@@ -81,7 +79,7 @@ func (tool *CheckTool) TestDNS(host string) ([]string, error) {
 		Path:     "/socket",
 		RawQuery: urlValues.Encode(),
 	}
-	log.Println("url0:", url0.String())
+	log.Infof("url0:%s", url0.String())
 
 	header := make(http.Header)
 	header.Set("User-Agent", tool.Conf.UserAgent)
@@ -126,24 +124,24 @@ func (tool *CheckTool) TestDNS(host string) ([]string, error) {
 			return nil, err
 		}
 		if resp.Type == "TaskEnd" {
-			log.Println("task end")
+			log.Info("Task end")
 			break
 		} else if resp.Type == "TaskAccept" {
-			log.Println("task accept")
+			log.Info("Task accept")
 		} else if resp.Type == "NewData" {
-			log.Println("new data")
+			log.Info("New data")
 			newData, err := unmarshalNewData(resp.Data)
 			if err != nil {
-				log.Println("WARN:", err)
+				log.Warningf("Unmarshal new data found error:%v", err)
 				continue
 			}
 
 			if newData.ErrMsg != "" {
-				log.Println("WARN newData.ErrMsg:", newData.ErrMsg)
+				log.Warningf("Error exists in new data:%s", newData.ErrMsg)
 				continue
 			}
 
-			log.Println(newData.SrcIP)
+			log.Infof("IP:%s", newData.SrcIP)
 			srcIps := strings.Split(newData.SrcIP, ";")
 			if len(srcIps) > 0 {
 				srcIp := srcIps[0]

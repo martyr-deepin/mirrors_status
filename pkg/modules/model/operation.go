@@ -7,6 +7,9 @@ type MirrorOperation struct {
 	CreateDate time.Time
 	Username string
 	OperationType string
+	MirrorNames string
+	CDNNodes string
+	Duration string
 	Operations []OperationData `gorm:"ForeignKey:MirrorOperationId"`
 }
 
@@ -16,3 +19,10 @@ type OperationData struct {
 	MirrorOperationId int
 }
 
+const (
+	ADD = "ADD"
+	DELETE = "DELETE"
+	UPDATE = "UPDATE"
+	QUERY = "QUERY"
+	SYNC = "SYNC"
+)

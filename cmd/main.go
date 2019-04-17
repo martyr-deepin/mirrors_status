@@ -10,6 +10,7 @@ import (
 	"mirrors_status/pkg/modules/db/mysql"
 	"mirrors_status/pkg/modules/model"
 	"mirrors_status/pkg/modules/service"
+	"strconv"
 )
 
 type App struct {
@@ -57,7 +58,7 @@ func (app App) AddMirror(c *gin.Context) {
 	if err != nil {
 		log.Errorf("Bind json found error:%v", err)
 	}
-	err = service.AddMirror(app.influxClient, reqMirror)
+	err = service.AddMirror(app.mysqlClient, app.influxClient, reqMirror)
 	if err != nil {
 		log.Errorf("Insert data found error:%v", err)
 	}
@@ -72,7 +73,7 @@ func (app App) AddMirrorCdn(c *gin.Context) {
 	if err != nil {
 		log.Errorf("Bind json found error:%v", err)
 	}
-	err = service.AddMirrorCdn(app.influxClient, reqMirrorCdn)
+	err = service.AddMirrorCdn(app.mysqlClient, app.influxClient, reqMirrorCdn)
 	if err != nil {
 		log.Errorf("Insert data found error:%v", err)
 	}
@@ -89,10 +90,31 @@ func (app App) TestApi(c *gin.Context) {
 	})
 }
 
-func (app App) CheckTest(c *gin.Context) {
-	app.cdnChecker.Init(app.serverConfig.CdnCkecker)
+func (app App) SyncAllMirrors(c *gin.Context) {
+	err := app.cdnChecker.CheckAllMirrors(app.mysqlClient, app.serverConfig.CdnCkecker)
+	if err != nil {
+		log.Errorf("Sync all mirror found error:%v", err)
+	}
 	c.JSON(200, gin.H{
-		"res": "success",
+		"res": err.Error(),
+	})
+}
+
+func (app App) SyncMirror(c *gin.Context) {
+	var reqMirror model.MirrorsPoint
+	err := c.ShouldBindJSON(&reqMirror)
+	res := reqMirror.Name
+	if err != nil {
+		log.Errorf("Bind json found error:%v", err)
+		res = err.Error()
+	}
+	err = app.cdnChecker.CheckMirror(app.mysqlClient, reqMirror, app.serverConfig.CdnCkecker)
+	if err != nil {
+		log.Errorf("Sync mirror found error:%v", err)
+		res = err.Error()
+	}
+	c.JSON(200, gin.H{
+		"res": res,
 	})
 }
 
@@ -107,6 +129,12 @@ func main() {
 	r.POST("/mirrors_cdn", app.AddMirrorCdn)
 
 	r.POST("/test", app.TestApi)
-	r.GET("/check", app.CheckTest)
-	r.Run(":" + app.serverConfig.Http.Port)
+
+	r.GET("/check", app.SyncAllMirrors)
+
+	r.POST("/check", app.SyncMirror)
+
+
+
+	r.Run(":" + strconv.Itoa(app.serverConfig.Http.Port))
 }
