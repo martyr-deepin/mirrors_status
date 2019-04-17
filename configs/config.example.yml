@@ -17,10 +17,17 @@ mysql:
   password:
 
 cdn-checker:
+  # Default CDN URL without HTTP/HTTPS header
   default-cdn:
+  # Simulating browser
   user-agent:
+  # URL of checker API provider, used for user login
   api-site:
+  # URL path of checker API
   api-path:
+  # URL for fetching mirror info in JSON format
   target:
+  # URL for storing source packages
   source-url:
+  # URL path to get source change list
   source-path:
