@@ -90,10 +90,31 @@ func (app App) TestApi(c *gin.Context) {
 	})
 }
 
-func (app App) CheckTest(c *gin.Context) {
-	app.cdnChecker.Init(app.serverConfig.CdnCkecker)
+func (app App) SyncAllMirrors(c *gin.Context) {
+	err := app.cdnChecker.CheckAllMirrors(app.mysqlClient, app.serverConfig.CdnCkecker)
+	if err != nil {
+		log.Errorf("Sync all mirror found error:%v", err)
+	}
 	c.JSON(200, gin.H{
-		"res": "success",
+		"res": err.Error(),
+	})
+}
+
+func (app App) SyncMirror(c *gin.Context) {
+	var reqMirror model.MirrorsPoint
+	err := c.ShouldBindJSON(&reqMirror)
+	res := reqMirror.Name
+	if err != nil {
+		log.Errorf("Bind json found error:%v", err)
+		res = err.Error()
+	}
+	err = app.cdnChecker.CheckMirror(app.mysqlClient, reqMirror, app.serverConfig.CdnCkecker)
+	if err != nil {
+		log.Errorf("Sync mirror found error:%v", err)
+		res = err.Error()
+	}
+	c.JSON(200, gin.H{
+		"res": res,
 	})
 }
 
@@ -108,6 +129,12 @@ func main() {
 	r.POST("/mirrors_cdn", app.AddMirrorCdn)
 
 	r.POST("/test", app.TestApi)
-	r.GET("/check", app.CheckTest)
+
+	r.GET("/check", app.SyncAllMirrors)
+
+	r.POST("/check", app.SyncMirror)
+
+
+
 	r.Run(":" + strconv.Itoa(app.serverConfig.Http.Port))
 }

@@ -1,33 +1,33 @@
 http:
-  host:
-  port:
+  host: 127.0.0.1
+  port: 8080
 
 influxdb:
-  host:
-  port:
-  dbName:
-  password:
-  username:
+  host: 10.0.10.70
+  port: 18901
+  dbName: mirror_status
+  password: deepinadmin
+  username: admin
 
 mysql:
-  host:
-  port:
-  dbName:
-  username:
-  password:
+  host: db
+  port: 3306
+  dbName: mirror_status
+  username: root
+  password: admin
 
 cdn-checker:
   # Default CDN URL without HTTP/HTTPS header
-  default-cdn:
+  default-cdn: cdn.packages.deepin.com
   # Simulating browser
-  user-agent:
+  user-agent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.84 Safari/537.36"
   # URL of checker API provider, used for user login
-  api-site:
+  api-site: https://www.17ce.com
   # URL path of checker API
-  api-path:
+  api-path: /site/checkuser
   # URL for fetching mirror info in JSON format
-  target:
+  target: http://server-12:8900/v1/mirrors
   # URL for storing source packages
-  source-url:
+  source-url: http://packages.deepin.com/deepin/
   # URL path to get source change list
-  source-path:
+  source-path: changelist/

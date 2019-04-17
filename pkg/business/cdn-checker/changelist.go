@@ -3,9 +3,9 @@ package cdn_checker
 import (
 	"encoding/json"
 	"github.com/PuerkitoBio/goquery"
-	"log"
 	"math/rand"
 	"mirrors_status/pkg/config"
+	"mirrors_status/pkg/log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -31,8 +31,7 @@ func (v changeMetaInfoSlice) Swap(i, j int) {
 
 func getChangeInfo(conf configs.CdnCheckerConf, name string) (*ChangeInfo, error) {
 	u := conf.SourceUrl + conf.SourcePath + name
-	//u := changeListUrl + name
-	log.Println("getChangeInfo u:", u)
+	log.Infof("Get change info from:%s", u)
 	resp, err := http.Get(u)
 	if err != nil {
 		return nil, err
@@ -159,7 +158,7 @@ func getChangeFiles(conf configs.CdnCheckerConf) ([]string, error) {
 	for _, name := range recentlyChanges {
 		ci, err := getChangeInfo(conf, name)
 		if err != nil {
-			log.Println("WARN:", err)
+			log.Errorf("Get change info found error:%v", err)
 			continue
 		}
 

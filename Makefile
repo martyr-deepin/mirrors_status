@@ -2,9 +2,6 @@ PROGRAM=mirrors_status
 DOCKER_TARGET=hub.deepin.io/deepin/mirrors_status
 DOCKER_BUILD_TARGET=${DOCKER_TARGET}.builder
 
-run:
-	go run cmd/main.go
-
 build: 
 	go build -o ${PROGRAM} mirrors_status/cmd
 
