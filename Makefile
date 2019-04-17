@@ -1,7 +1,7 @@
 BinDir=$(shell pwd)/bin
 
 run:
-	go run cmd/init.go
+	go run cmd/main.go
 
 bin:
 	mkdir -p bin
