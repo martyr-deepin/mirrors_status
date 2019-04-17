@@ -11,8 +11,8 @@ run:
 	go run cmd/main.go
 
 docker:
-	docker build -f deployments/Dockerfile --target builder -t ${DOCKER_BUILD_TARGET}
-	docker build -f deployments/Dockerfile -t ${DOCKER_TARGET}
+	docker build -f deployments/Dockerfile --target builder -t ${DOCKER_BUILD_TARGET} .
+	docker build -f deployments/Dockerfile -t ${DOCKER_TARGET} .
 
 docker-push:
 	docker push ${DOCKER_BUILD_TARGET}
