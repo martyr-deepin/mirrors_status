@@ -33,8 +33,8 @@ func AddMirror(mysqlClient *mysql.Client, influxClient *influxdb.Client, mirror 
 	}
 	CreateOperation(mysqlClient, model.MirrorOperation{
 		CreateDate: now,
-		OperationType: "ADD MIRRORS",
-		MirrorNames: mirror.Name,
+		OperationType: model.ADD,
+		MirrorId: mirror.Name,
 	})
 	return
 }
@@ -47,9 +47,8 @@ func AddMirrorCdn(mysqlClient *mysql.Client, client *influxdb.Client, cdn model.
 	}
 	CreateOperation(mysqlClient, model.MirrorOperation{
 		CreateDate: now,
-		OperationType: "ADD MIRROR CDN",
-		MirrorNames: cdn.MirrorId,
-		CDNNodes: cdn.NodeIpAddr,
+		OperationType: model.ADD,
+		MirrorId: cdn.MirrorId,
 	})
 	return
 }

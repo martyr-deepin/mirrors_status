@@ -1,9 +1,9 @@
 package main
 
 import (
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"mirrors_status/cmd/infrastructure"
-	"mirrors_status/pkg/business/cdn-checker"
+	cdn_checker "mirrors_status/pkg/business/cdn-checker"
 	"mirrors_status/pkg/config"
 	"mirrors_status/pkg/log"
 	"mirrors_status/pkg/modules/db/influxdb"
@@ -28,13 +28,11 @@ func Init() (app App) {
 		serverConfig: serverConfig,
 	}
 
-	infrastructure.InitDB(*serverConfig)
-	infrastructure.InitCDNCkecker(*app.serverConfig.CdnCkecker)
-	app.influxClient = infrastructure.GetInfluxdbClient()
-	app.mysqlClient = infrastructure.GetMySQLClient()
-	app.cdnChecker = infrastructure.GetCdnChecker()
-
-	infrastructure.InitScheme()
+	configs.InitDB(*serverConfig)
+	app.influxClient = configs.GetInfluxdbClient()
+	app.mysqlClient = configs.GetMySQLClient()
+	app.cdnChecker = cdn_checker.NewCDNChecker(app.serverConfig.CdnChecker)
+	configs.InitScheme()
 	return
 }
 
@@ -91,7 +89,7 @@ func (app App) TestApi(c *gin.Context) {
 }
 
 func (app App) SyncAllMirrors(c *gin.Context) {
-	err := app.cdnChecker.CheckAllMirrors(app.mysqlClient, app.serverConfig.CdnCkecker)
+	err := app.cdnChecker.CheckAllMirrors(app.serverConfig.CdnChecker)
 	if err != nil {
 		log.Errorf("Sync all mirror found error:%v", err)
 	}
@@ -101,14 +99,12 @@ func (app App) SyncAllMirrors(c *gin.Context) {
 }
 
 func (app App) SyncMirror(c *gin.Context) {
-	var reqMirror model.MirrorsPoint
-	err := c.ShouldBindJSON(&reqMirror)
-	res := reqMirror.Name
-	if err != nil {
-		log.Errorf("Bind json found error:%v", err)
-		res = err.Error()
-	}
-	err = app.cdnChecker.CheckMirror(app.mysqlClient, reqMirror, app.serverConfig.CdnCkecker)
+	res := "success"
+	name := c.Param("name")
+	//name := c.PostForm("name")
+
+	log.Infof("Name of mirror:%s", name)
+	err := app.cdnChecker.CheckMirror(name, app.serverConfig.CdnChecker)
 	if err != nil {
 		log.Errorf("Sync mirror found error:%v", err)
 		res = err.Error()
@@ -118,23 +114,33 @@ func (app App) SyncMirror(c *gin.Context) {
 	})
 }
 
+func (app App) OperationHistory(c *gin.Context) {
+	data := service.GetOperationsByDateDesc(app.mysqlClient)
+	c.JSON(200, gin.H{
+		"history": data,
+	})
+}
+
 func main() {
 	app := Init()
 	r := gin.Default()
+	corsConfig := cors.DefaultConfig()
+	corsConfig.AllowOrigins=[]string{app.serverConfig.Http.AllowOrigin}
+	r.Use(cors.New(corsConfig))
 
-	r.GET("/mirrors", app.GetAllMirrors)
-	r.GET("/mirrors_cdn", app.GetAllMirrorsCdn)
-
-	r.POST("/mirrors", app.AddMirror)
-	r.POST("/mirrors_cdn", app.AddMirrorCdn)
-
-	r.POST("/test", app.TestApi)
+	//r.GET("/mirrors", app.GetAllMirrors)
+	//r.GET("/mirrors_cdn", app.GetAllMirrorsCdn)
+	//
+	//r.POST("/mirrors", app.AddMirror)
+	//r.POST("/mirrors_cdn", app.AddMirrorCdn)
+	//
+	//r.POST("/test", app.TestApi)
 
 	r.GET("/check", app.SyncAllMirrors)
 
-	r.POST("/check", app.SyncMirror)
+	r.GET("/check/:name", app.SyncMirror)
 
-
+	r.GET("/history", app.OperationHistory)
 
 	r.Run(":" + strconv.Itoa(app.serverConfig.Http.Port))
 }

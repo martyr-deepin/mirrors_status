@@ -13,23 +13,23 @@ import (
 	"time"
 )
 
-type changeMetaInfoSlice []ChangeMetaInfo
+type ChangeMetaInfoSlice []ChangeMetaInfo
 
-func (v changeMetaInfoSlice) Len() int {
+func (v ChangeMetaInfoSlice) Len() int {
 	return len(v)
 }
 
-func (v changeMetaInfoSlice) Less(i, j int) bool {
+func (v ChangeMetaInfoSlice) Less(i, j int) bool {
 	t1 := v[i].t
 	t2 := v[j].t
 	return t1.Sub(t2) < 0
 }
 
-func (v changeMetaInfoSlice) Swap(i, j int) {
+func (v ChangeMetaInfoSlice) Swap(i, j int) {
 	v[i], v[j] = v[j], v[i]
 }
 
-func getChangeInfo(conf configs.CdnCheckerConf, name string) (*ChangeInfo, error) {
+func GetChangeInfo(conf configs.CdnCheckerConf, name string) (*ChangeInfo, error) {
 	u := conf.SourceUrl + conf.SourcePath + name
 	log.Infof("Get change info from:%s", u)
 	resp, err := http.Get(u)
@@ -46,7 +46,7 @@ func getChangeInfo(conf configs.CdnCheckerConf, name string) (*ChangeInfo, error
 	return &v, nil
 }
 
-func getChangeList(conf configs.CdnCheckerConf) ([]string, error) {
+func GetChangeList(conf configs.CdnCheckerConf) ([]string, error) {
 	resp, err := http.Get(conf.SourceUrl + conf.SourcePath)
 	if err != nil {
 		return nil, err
@@ -71,7 +71,7 @@ func getChangeList(conf configs.CdnCheckerConf) ([]string, error) {
 	return result, nil
 }
 
-func ignoreFile(filename string) bool {
+func IgnoreFile(filename string) bool {
 	if strings.Contains(filename, "__GUARD__") ||
 		strings.Contains(filename, "/Sources.diff/") ||
 		strings.Contains(filename, "/Packages.diff/") {
@@ -89,7 +89,7 @@ func ignoreFile(filename string) bool {
 	return false
 }
 
-func randSelectN(in map[string]struct{}, n int) (result []string) {
+func RandSelectN(in map[string]struct{}, n int) (result []string) {
 	total := len(in)
 
 	if total <= n {
@@ -111,8 +111,8 @@ func randSelectN(in map[string]struct{}, n int) (result []string) {
 	return
 }
 
-func getChangeFiles(conf configs.CdnCheckerConf) ([]string, error) {
-	changeList, err := getChangeList(conf)
+func GetChangeFiles(conf configs.CdnCheckerConf) ([]string, error) {
+	changeList, err := GetChangeList(conf)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +134,7 @@ func getChangeFiles(conf configs.CdnCheckerConf) ([]string, error) {
 		return nil, nil
 	}
 
-	sort.Sort(changeMetaInfoSlice(changeMetaInfoList))
+	sort.Sort(ChangeMetaInfoSlice(changeMetaInfoList))
 	maxT := changeMetaInfoList[len(changeMetaInfoList)-1].t
 
 	var recentlyChanges []string
@@ -156,14 +156,14 @@ func getChangeFiles(conf configs.CdnCheckerConf) ([]string, error) {
 	nonDebChangeFilesMap := make(map[string]struct{})
 	var changeFiles []string
 	for _, name := range recentlyChanges {
-		ci, err := getChangeInfo(conf, name)
+		ci, err := GetChangeInfo(conf, name)
 		if err != nil {
 			log.Errorf("Get change info found error:%v", err)
 			continue
 		}
 
 		for _, a := range ci.Added {
-			if ignoreFile(a.FilePath) {
+			if IgnoreFile(a.FilePath) {
 				continue
 			}
 
@@ -175,7 +175,7 @@ func getChangeFiles(conf configs.CdnCheckerConf) ([]string, error) {
 		}
 	}
 	// about 300 deb files selected
-	changeFiles = randSelectN(debChangeFilesMap, 300)
+	changeFiles = RandSelectN(debChangeFilesMap, 300)
 	for file := range nonDebChangeFilesMap {
 		changeFiles = append(changeFiles, file)
 	}

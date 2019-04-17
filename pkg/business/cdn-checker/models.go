@@ -33,19 +33,19 @@ type FileValidateInfo struct {
 }
 
 type TestRecord struct {
-	standard *FileValidateInfo
-	result   *FileValidateInfo
-	equal    bool
-	err      error
+	Standard *FileValidateInfo
+	Result   *FileValidateInfo
+	Equal    bool
+	Err      error
 }
 
 type TestResult struct {
-	name           string
-	urlPrefix      string
-	cdnNodeAddress string
-	records        []TestRecord
-	percent        float64
-	numErrs        int
+	Name           string `json:"name"`
+	UrlPrefix      string `json:"url_prefix"`
+	CdnNodeAddress string `json:"cdn_node_address"`
+	Records        []TestRecord `json:"records"`
+	Percent        float64 `json:"percent"`
+	NumErrs        int `json:"num_errs"`
 }
 
 type ChangeMetaInfo struct {
