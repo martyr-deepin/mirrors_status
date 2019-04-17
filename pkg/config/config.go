@@ -8,11 +8,7 @@ import (
 
 type InfluxDBConf struct {
 	Host     string `yaml:"host"`
-<<<<<<< HEAD:pkg/config/config.go
-	Port     string `yaml:"port"`
-=======
 	Port     int `yaml:"port"`
->>>>>>> zhaojuwen/sync-check:pkg/config/config.go
 	DBName   string `yaml:"dbName"`
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
@@ -21,24 +17,6 @@ type InfluxDBConf struct {
 type HttpConf struct {
 	Port int `yaml:"port"`
 	Host string `yaml:"host"`
-}
-
-type MySQLConf struct {
-	Host     string `yaml:"host"`
-	Port     int `yaml:"port"`
-	DBName   string `yaml:"dbName"`
-	Username string `yaml:"username"`
-	Password string `yaml:"password"`
-}
-
-type CdnCheckerConf struct {
-	DefaultCdn string `yaml:"default-cdn"`
-	UserAgent string `yaml:"user-agent"`
-	ApiSite string `yaml:"api-site"`
-	ApiPath string `yaml:"api-path"`
-	Target string `yaml:"target"`
-	SourceUrl string `yaml:"source-url"`
-	SourcePath string `yaml:"source-path"`
 }
 
 type MySQLConf struct {
