@@ -7,6 +7,11 @@ type MirrorOperation struct {
 	CreateDate time.Time
 	Username string
 	OperationType string
+<<<<<<< HEAD
+=======
+	MirrorNames string
+	CDNNodes string
+>>>>>>> zhaojuwen/sync-check
 	Operations []OperationData `gorm:"ForeignKey:MirrorOperationId"`
 }
 

@@ -4,6 +4,10 @@ import (
 	"github.com/influxdata/influxdb/client/v2"
 	"mirrors_status/pkg/log"
 	"mirrors_status/pkg/modules/db/influxdb"
+<<<<<<< HEAD
+=======
+	"mirrors_status/pkg/modules/db/mysql"
+>>>>>>> zhaojuwen/sync-check
 	"mirrors_status/pkg/modules/model"
 	"time"
 )
@@ -24,6 +28,7 @@ func GetAllMirrorsCdn(client *influxdb.Client) []client.Result {
 	return res
 }
 
+<<<<<<< HEAD
 func AddMirror(client *influxdb.Client, mirror model.MirrorsPoint) (err error) {
 	err = client.PushMirror(time.Now(), mirror)
 	if err != nil {
@@ -37,6 +42,34 @@ func AddMirrorCdn(client *influxdb.Client, cdn model.MirrorsCdnPoint) (err error
 	if err != nil {
 		log.Errorf("Insert data found error:%v", err)
 	}
+=======
+func AddMirror(mysqlClient *mysql.Client, influxClient *influxdb.Client, mirror model.MirrorsPoint) (err error) {
+	now := time.Now()
+	err = influxClient.PushMirror(now, mirror)
+	if err != nil {
+		log.Errorf("Insert data found error:%v", err)
+	}
+	CreateOperation(mysqlClient, model.MirrorOperation{
+		CreateDate: now,
+		OperationType: "ADD MIRRORS",
+		MirrorNames: mirror.Name,
+	})
+	return
+}
+
+func AddMirrorCdn(mysqlClient *mysql.Client, client *influxdb.Client, cdn model.MirrorsCdnPoint) (err error) {
+	now := time.Now()
+	err = client.PushMirrorCdn(now, cdn)
+	if err != nil {
+		log.Errorf("Insert data found error:%v", err)
+	}
+	CreateOperation(mysqlClient, model.MirrorOperation{
+		CreateDate: now,
+		OperationType: "ADD MIRROR CDN",
+		MirrorNames: cdn.MirrorId,
+		CDNNodes: cdn.NodeIpAddr,
+	})
+>>>>>>> zhaojuwen/sync-check
 	return
 }
 

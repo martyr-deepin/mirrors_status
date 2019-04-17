@@ -2,7 +2,12 @@ PROGRAM=mirrors_status
 DOCKER_TARGET=hub.deepin.io/deepin/mirrors_status
 DOCKER_BUILD_TARGET=${DOCKER_TARGET}.builder
 
+<<<<<<< HEAD
 .PHONY: build run
+=======
+run:
+	go run cmd/main.go
+>>>>>>> zhaojuwen/sync-check
 
 build: 
 	go build -o ${PROGRAM} mirrors_status/cmd
