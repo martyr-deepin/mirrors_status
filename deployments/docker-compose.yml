@@ -1,0 +1,25 @@
+version: '3.3'
+
+networks:
+    backend:
+
+services:
+    server:
+        image: hub.deepin.io/deepin/mirrors_status:latest
+        ports:
+            - 18905:8905
+        restart: always
+        networks:
+            - backend
+        configs:
+            - /data/docker/mirrors_status/config.yml:/opt/gopath/src/mirrors_status/configs/config.yml
+
+     db:
+         image: mysql
+         ports:
+             - 18906:3306
+        restart: always
+        networks:
+            - backend
+        volumes:
+            - /data/docker/mirrors_status/mysql:/var/lib/mysql
