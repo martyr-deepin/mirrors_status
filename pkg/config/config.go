@@ -21,7 +21,7 @@ type HttpConf struct {
 
 type MySQLConf struct {
 	Host     string `yaml:"host"`
-	Port     string `yaml:"port"`
+	Port     int `yaml:"port"`
 	DBName   string `yaml:"dbName"`
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
