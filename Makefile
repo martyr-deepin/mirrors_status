@@ -2,7 +2,7 @@ PROGRAM=mirrors_status
 DOCKER_TARGET=hub.deepin.io/deepin/mirrors_status
 DOCKER_BUILD_TARGET=${DOCKER_TARGET}.builder
 
-.PHONY: build run vendor
+.PHONY: build run
 
 build: 
 	go build -o ${PROGRAM} mirrors_status/cmd
