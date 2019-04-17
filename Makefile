@@ -1,26 +1,24 @@
-BinDir=$(shell pwd)/bin
+PROGRAM=mirrors_status
+DOCKER_TARGET=hub.deepin.io/deepin/mirrors_status
+DOCKER_BUILD_TARGET=${DOCKER_TARGET}.builder
+
+.PHONY: build run vendor
+
+build: 
+	go build -o ${PROGRAM} mirrors_status/cmd
 
 run:
 	go run cmd/main.go
 
-bin:
-	mkdir -p bin
-	cd cmd/cdn-check; go build -race -v -o $(BinDir)/cdn-check
-	cd cmd/push_to_influxdb; go build -v -o $(BinDir)/push_to_influxdb
-	cd cmd; go build init.go
+docker:
+	docker build -f deployments/Dockerfile --target builder -t ${DOCKER_BUILD_TARGET}
+	docker build -f deployments/Dockerfile -t ${DOCKER_TARGET}
 
-.PHONY: bin run
+docker-push:
+	docker push ${DOCKER_BUILD_TARGET}
+	docker push ${DOCKER_TARGET}
 
-jenkins_bin:
-	if [ -z "$(WORKSPACE)" ]; then exit 1; fi
-	docker run --rm -e GOPROXY=https://goproxy.deepin.io -v $(WORKSPACE):/workspace -w /workspace songwentai/golang-go:1.11 bash -c "go install -mod=readonly -v ./...; mkdir -p bin; cp -v \`go env GOPATH\`/bin/* bin/; chown -R --reference=/workspace /workspace/bin"
+clean:
+	rm -rf ${PROGRAM}
 
-docker_image: bin docker_image0
-
-docker_image0:
-	docker build -t hub.deepin.io/deepin/mirrors_status:0.0.1 .
-
-jenkins_docker_image: jenkins_bin
-	if [ -z "$(DOCKER_IMAGE_NAME)" ]; then exit 1; fi
-	if [ -z "$(DOCKER_IMAGE_TAG)" ]; then exit 1; fi
-	docker build -t $(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG) .
+rebuild: clean build

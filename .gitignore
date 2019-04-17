@@ -1,7 +1,7 @@
 .vscode
 bin/
-vendor/*
-configs/*
+configs/config.yml
 .idea
 docs/
 result
+/mirrors_status
