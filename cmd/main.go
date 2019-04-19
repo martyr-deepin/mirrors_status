@@ -89,22 +89,22 @@ func (app App) TestApi(c *gin.Context) {
 }
 
 func (app App) SyncAllMirrors(c *gin.Context) {
-	res := "success"
 	username := c.Param("username")
-
 	log.Infof("User:%s trying sync all mirrors")
 	err := app.cdnChecker.CheckAllMirrors(app.serverConfig.CdnChecker, username)
 	if err != nil {
 		log.Errorf("Sync all mirror found error:%v", err)
-		res = err.Error()
+		c.JSON(400, gin.H{
+			"res": err.Error(),
+		})
+		return
 	}
 	c.JSON(200, gin.H{
-		"res": res,
+		"res": "success",
 	})
 }
 
 func (app App) SyncMirror(c *gin.Context) {
-	res := "success"
 	mirrorName := c.Param("mirror")
 	username := c.Param("username")
 
@@ -112,10 +112,13 @@ func (app App) SyncMirror(c *gin.Context) {
 	err := app.cdnChecker.CheckMirror(mirrorName, app.serverConfig.CdnChecker, username)
 	if err != nil {
 		log.Errorf("Sync mirror found error:%v", err)
-		res = err.Error()
+		c.JSON(400, gin.H{
+			"res": err.Error(),
+		})
+		return
 	}
 	c.JSON(200, gin.H{
-		"res": res,
+		"res": "success",
 	})
 }
 
