@@ -89,22 +89,27 @@ func (app App) TestApi(c *gin.Context) {
 }
 
 func (app App) SyncAllMirrors(c *gin.Context) {
-	err := app.cdnChecker.CheckAllMirrors(app.serverConfig.CdnChecker)
+	res := "success"
+	username := c.Param("username")
+
+	log.Infof("User:%s trying sync all mirrors")
+	err := app.cdnChecker.CheckAllMirrors(app.serverConfig.CdnChecker, username)
 	if err != nil {
 		log.Errorf("Sync all mirror found error:%v", err)
+		res = err.Error()
 	}
 	c.JSON(200, gin.H{
-		"res": err.Error(),
+		"res": res,
 	})
 }
 
 func (app App) SyncMirror(c *gin.Context) {
 	res := "success"
-	name := c.Param("name")
-	//name := c.PostForm("name")
+	mirrorName := c.Param("mirror")
+	username := c.Param("username")
 
-	log.Infof("Name of mirror:%s", name)
-	err := app.cdnChecker.CheckMirror(name, app.serverConfig.CdnChecker)
+	log.Infof("Username:%s, Mirror ID:%s", username, mirrorName)
+	err := app.cdnChecker.CheckMirror(mirrorName, app.serverConfig.CdnChecker, username)
 	if err != nil {
 		log.Errorf("Sync mirror found error:%v", err)
 		res = err.Error()
@@ -116,6 +121,14 @@ func (app App) SyncMirror(c *gin.Context) {
 
 func (app App) OperationHistory(c *gin.Context) {
 	data := service.GetOperationsByDateDesc(app.mysqlClient)
+	c.JSON(200, gin.H{
+		"history": data,
+	})
+}
+
+func (app App) OperationHistoryByMirror(c *gin.Context) {
+	mirror := c.Param("mirror")
+	data := service.GetOperationsByMirror(app.mysqlClient, mirror)
 	c.JSON(200, gin.H{
 		"history": data,
 	})
@@ -136,11 +149,13 @@ func main() {
 	//
 	//r.POST("/test", app.TestApi)
 
-	r.GET("/check", app.SyncAllMirrors)
+	r.GET("/check/:username", app.SyncAllMirrors)
 
-	r.GET("/check/:name", app.SyncMirror)
+	r.GET("/check/:username/:mirror", app.SyncMirror)
 
 	r.GET("/history", app.OperationHistory)
+
+	r.GET("/history/:mirror", app.OperationHistoryByMirror)
 
 	r.Run(":" + strconv.Itoa(app.serverConfig.Http.Port))
 }

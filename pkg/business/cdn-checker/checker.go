@@ -715,7 +715,7 @@ func (checker *CDNChecker) PushAllMirrorsTestResults(testResults []*TestResult) 
 	return nil
 }
 
-func (checker *CDNChecker) TestAllMirrors(mirrors0 mirrors, validateInfoList []*FileValidateInfo) {
+func (checker *CDNChecker) TestAllMirrors(mirrors0 mirrors, validateInfoList []*FileValidateInfo, username string) {
 	if optNoTestHidden {
 		var tempMirrors mirrors
 		for _, mirror := range mirrors0 {
@@ -762,13 +762,14 @@ func (checker *CDNChecker) TestAllMirrors(mirrors0 mirrors, validateInfoList []*
 			CreateDate: time.Now(),
 			OperationType: model.SYNC,
 			MirrorId: mirror.Id,
+			Username: username,
 		})
 	}
 
 	checker.PushAllMirrorsTestResults(testResults)
 }
 
-func (checker *CDNChecker) Init(c *configs.CdnCheckerConf) error {
+func (checker *CDNChecker) Init(c *configs.CdnCheckerConf, username string) error {
 	checker.CheckTool = CheckTool{
 		Conf: c,
 	}
@@ -865,7 +866,7 @@ func (checker *CDNChecker) Init(c *configs.CdnCheckerConf) error {
 			log.Warningf("Fetch CDN DNS found error:%v", err)
 			return err
 		}
-		checker.TestAllMirrors(mirrors, validateInfoList)
+		checker.TestAllMirrors(mirrors, validateInfoList, username)
 	} else {
 		var mirror0 *Mirror
 		for _, mirror := range mirrors {
@@ -883,17 +884,18 @@ func (checker *CDNChecker) Init(c *configs.CdnCheckerConf) error {
 			CreateDate: time.Now(),
 			OperationType: model.SYNC,
 			MirrorId: mirror0.Id,
+			Username: username,
 		})
 
 	}
 	return nil
 }
 
-func (checker *CDNChecker) CheckAllMirrors(c *configs.CdnCheckerConf) error {
-	return checker.Init(c)
+func (checker *CDNChecker) CheckAllMirrors(c *configs.CdnCheckerConf, username string) error {
+	return checker.Init(c, username)
 }
 
-func (checker *CDNChecker) CheckMirror(name string, c *configs.CdnCheckerConf) error {
+func (checker *CDNChecker) CheckMirror(name string, c *configs.CdnCheckerConf, username string) error {
 	optMirror = name
-	return checker.Init(c)
+	return checker.Init(c, username)
 }

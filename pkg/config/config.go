@@ -65,40 +65,40 @@ func (c *ServerConf) GetConfig() *ServerConf {
 }
 
 var (
-	influxdbClient *influxdb.Client
-	mysqlClient *mysql.Client
+	InfluxdbClient *influxdb.Client
+	MysqlClient *mysql.Client
 )
 
 func GetInfluxdbClient() *influxdb.Client {
-	return influxdbClient
+	return InfluxdbClient
 }
 
 func GetMySQLClient() *mysql.Client {
-	return mysqlClient
+	return MysqlClient
 }
 
 func InitInfluxdbClient(host string, port int, dbname, username, password string) error {
 	log.Infof("trying connecting influxdb:%s:%s %s %s %s", host, port, dbname, username, password)
-	influxdbClient = &influxdb.Client{
+	InfluxdbClient = &influxdb.Client{
 		Host:     host,
 		Port:     port,
 		DbName:   dbname,
 		Username: username,
 		Password: password,
 	}
-	return influxdbClient.NewInfluxClient()
+	return InfluxdbClient.NewInfluxClient()
 }
 
 func InitMySQLClient(host string, port int, dbname, username, password string) error {
 	log.Infof("trying connecting MySQL:%s:%s %s %s %s", host, port, dbname, username, password)
-	mysqlClient = &mysql.Client{
+	MysqlClient = &mysql.Client{
 		Host:     host,
 		Port:     port,
 		DbName:   dbname,
 		Username: username,
 		Password: password,
 	}
-	return mysqlClient.NewMySQLClient()
+	return MysqlClient.NewMySQLClient()
 }
 
 func InitDB(config ServerConf) {
@@ -126,5 +126,5 @@ func InitDB(config ServerConf) {
 }
 
 func InitScheme() {
-	mysql.MigrateTables(mysqlClient)
+	mysql.MigrateTables(MysqlClient)
 }

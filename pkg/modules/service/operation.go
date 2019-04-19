@@ -17,6 +17,12 @@ func GetOperationsByUsername(client *mysql.Client, username string) []model.Mirr
 	return operations
 }
 
+func GetOperationsByMirror(client *mysql.Client, mirror string) []model.MirrorOperation {
+	operations := []model.MirrorOperation{}
+	client.DB.Where("mirror_id=?", mirror).Find(&operations)
+	return operations
+}
+
 type MirrorOperations struct {
 	Operations []*model.MirrorOperation
 }
