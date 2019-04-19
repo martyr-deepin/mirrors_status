@@ -1,0 +1,97 @@
+openapi: 3.0.0
+info:
+  title: mirrors_status API
+  description: API demonstrations for mirrors_status
+servers:
+  - url: http://127.0.0.1:8088
+    description: Development server on localhost
+  - url: http://10.0.10.70:18905
+    description: Company internal prod server
+paths:
+  /check/{username}:
+    get:
+      summary: Check all mirrors stored in database of mirrors-management-system project
+      description: The server may not respond instantly but run in background and the request will be pending before check task is finished
+      parameters:
+        - name: username
+          in: path
+          required: true
+          description: Check all mirrors
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: string
+        '400':
+          description: Bad request with error message return
+          content:
+            application/json:
+              schema:
+                type: string
+  /check/{username}/{mirror}:
+    get:
+      summary: Check certain mirror post in request path
+      description: The server will respond until check is finished
+      parameters:
+        - name: username
+          in: path
+          required: true
+          description: Username
+          schema:
+            type: string
+        - name: mirror
+          in: path
+          required: true
+          description: Mirror ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: string
+        '400':
+          description: Bad request with error message return
+          content:
+            application/json:
+              schema:
+                type: string
+  /history:
+    get:
+      summary: Get operations of all mirrors
+      description: Operation records will be listed in response data
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+  /history/{mirror}:
+    get:
+      summary: Get history record of certain mirror request in path
+      description: Operation on certain mirror
+      parameters:
+        - name: mirror
+          in: path
+          required: true
+          description: ID of mirror
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
