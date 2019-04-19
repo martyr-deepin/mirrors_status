@@ -17,9 +17,19 @@ func GetOperationsByUsername(client *mysql.Client, username string) []model.Mirr
 	return operations
 }
 
-func GetOperationsByDateDesc(client *mysql.Client) []model.MirrorOperation {
+func GetOperationsByMirror(client *mysql.Client, mirror string) []model.MirrorOperation {
 	operations := []model.MirrorOperation{}
-	client.DB.Exec("select * from mirror_operations order by create_date desc", operations)
+	client.DB.Where("mirror_id=?", mirror).Find(&operations)
+	return operations
+}
+
+type MirrorOperations struct {
+	Operations []*model.MirrorOperation
+}
+
+func GetOperationsByDateDesc(client *mysql.Client) []model.MirrorOperation {
+	var operations []model.MirrorOperation
+	client.DB.Raw("select * from mirror_operations order by create_date desc").Scan(&operations)
 	return operations
 }
 

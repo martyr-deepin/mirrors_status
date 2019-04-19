@@ -16,7 +16,13 @@ type CheckTool struct {
 	Conf *configs.CdnCheckerConf
 }
 
-func (tool *CheckTool) checkUser(url1 string, type0 string) (*checkUserResult, error) {
+func NewCheckTool(conf *configs.CdnCheckerConf) CheckTool {
+	return CheckTool{
+		Conf: conf,
+	}
+}
+
+func (tool *CheckTool) CheckUser(url1 string, type0 string) (*checkUserResult, error) {
 	url0 := tool.Conf.ApiSite + tool.Conf.ApiPath
 	postForm := make(url.Values)
 	postForm.Add("url", url1)
@@ -49,7 +55,7 @@ func (tool *CheckTool) checkUser(url1 string, type0 string) (*checkUserResult, e
 	return &result, nil
 }
 
-func unmarshalNewData(data []byte) (*NewData, error) {
+func UnmarshalNewData(data []byte) (*NewData, error) {
 	var v NewData
 	err := json.Unmarshal(data, &v)
 	if err != nil {
@@ -59,7 +65,7 @@ func unmarshalNewData(data []byte) (*NewData, error) {
 }
 
 func (tool *CheckTool) TestDNS(host string) ([]string, error) {
-	checkUserResult, err := tool.checkUser(host, "dns")
+	checkUserResult, err := tool.CheckUser(host, "dns")
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +136,7 @@ func (tool *CheckTool) TestDNS(host string) ([]string, error) {
 			log.Info("Task accept")
 		} else if resp.Type == "NewData" {
 			log.Info("New data")
-			newData, err := unmarshalNewData(resp.Data)
+			newData, err := UnmarshalNewData(resp.Data)
 			if err != nil {
 				log.Warningf("Unmarshal new data found error:%v", err)
 				continue
