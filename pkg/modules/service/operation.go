@@ -1,25 +1,25 @@
 package service
 
 import (
+	"mirrors_status/pkg/config"
 	"mirrors_status/pkg/log"
-	"mirrors_status/pkg/modules/db/mysql"
 	"mirrors_status/pkg/modules/model"
 )
 
-func CreateOperation(client *mysql.Client, operation model.MirrorOperation) {
+func CreateOperation(operation model.MirrorOperation) {
 	log.Infof("Inserting operation:%v", operation)
-	client.DB.Create(&operation)
+	configs.GetMySQLClient().DB.Create(&operation)
 }
 
-func GetOperationsByUsername(client *mysql.Client, username string) []model.MirrorOperation {
+func GetOperationsByUsername(username string) []model.MirrorOperation {
 	operations := []model.MirrorOperation{}
-	client.DB.Where("username=?", username).Find(&operations)
+	configs.GetMySQLClient().DB.Where("username=?", username).Find(&operations)
 	return operations
 }
 
-func GetOperationsByMirror(client *mysql.Client, mirror string) []model.MirrorOperation {
+func GetOperationsByMirror(mirror string) []model.MirrorOperation {
 	operations := []model.MirrorOperation{}
-	client.DB.Where("mirror_id=?", mirror).Find(&operations)
+	configs.GetMySQLClient().DB.Where("mirror_id=?", mirror).Find(&operations)
 	return operations
 }
 
@@ -27,12 +27,18 @@ type MirrorOperations struct {
 	Operations []*model.MirrorOperation
 }
 
-func GetOperationsByDateDesc(client *mysql.Client) []model.MirrorOperation {
+func GetOperationsByDateDesc() []model.MirrorOperation {
 	var operations []model.MirrorOperation
-	client.DB.Raw("select * from mirror_operations order by create_date desc").Scan(&operations)
+	configs.GetMySQLClient().DB.Raw("select * from mirror_operations order by create_date desc").Scan(&operations)
 	return operations
 }
 
-func DelOperationByUsername(client *mysql.Client, username string) {
-	client.DB.Debug().Table("mirror_operations").Where("username=?", username).Delete(&model.MirrorOperation{})
+func DelOperationByUsername(username string) {
+	configs.GetMySQLClient().DB.Debug().Table("mirror_operations").Where("username=?", username).Delete(&model.MirrorOperation{})
+}
+
+func UpdateMirrorStatus(index string, status string) {
+	var operation model.MirrorOperation
+	configs.GetMySQLClient().DB.Table("mirror_operations").Where("`index` = ?", index).Find(&operation)
+	configs.GetMySQLClient().DB.Table("mirror_operations").Model(&operation).Update("status", status)
 }

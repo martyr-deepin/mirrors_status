@@ -14,14 +14,15 @@ type ChangeInfo struct {
 }
 
 type Mirror struct {
-	Id       string                       `json:"id"`
-	Weight   int                          `json:"weight"`
-	Name     string                       `json:"name"`
-	UrlHttp  string                       `json:"urlHttp"`
-	UrlHttps string                       `json:"urlHttps"`
-	UrlFtp   string                       `json:"urlFtp"`
-	Country  string                       `json:"country"`
-	Locale   map[string]map[string]string `json:"locale"`
+	Id         string                       `json:"id"`
+	Weight     int                          `json:"weight"`
+	Name       string                       `json:"name"`
+	UrlHttp    string                       `json:"urlHttp"`
+	UrlHttps   string                       `json:"urlHttps"`
+	UrlFtp     string                       `json:"urlFtp"`
+	Country    string                       `json:"country"`
+	Locale     map[string]map[string]string `json:"locale"`
+	SyncStatus string                       `json:"sync_status"`
 }
 
 type FileValidateInfo struct {
@@ -40,12 +41,12 @@ type TestRecord struct {
 }
 
 type TestResult struct {
-	Name           string `json:"name"`
-	UrlPrefix      string `json:"url_prefix"`
-	CdnNodeAddress string `json:"cdn_node_address"`
+	Name           string       `json:"name"`
+	UrlPrefix      string       `json:"url_prefix"`
+	CdnNodeAddress string       `json:"cdn_node_address"`
 	Records        []TestRecord `json:"records"`
-	Percent        float64 `json:"percent"`
-	NumErrs        int `json:"num_errs"`
+	Percent        float64      `json:"percent"`
+	NumErrs        int          `json:"num_errs"`
 }
 
 type ChangeMetaInfo struct {
@@ -84,7 +85,6 @@ type checkUserResult struct {
 
 		// TODO
 		//Nodelink []interface{} `json:"nodelink"`
-
 	} `json:"data"`
 }
 

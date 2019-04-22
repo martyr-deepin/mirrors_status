@@ -26,4 +26,3 @@ func Show(vs []OldResult) {
 		fmt.Printf("%s has %d data\n", n, len(v))
 	}
 }
-

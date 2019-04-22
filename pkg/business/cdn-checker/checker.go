@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/influxdata/influxdb/uuid"
 	"github.com/ivpusic/grpool"
 	"io"
 	llog "log"
@@ -610,7 +611,6 @@ func TestMirrorCommon(mirrorId, urlPrefix string, mirrorWeight int,
 		vi := validateInfo
 		pool.JobQueue <- func() {
 			validateInfo1, err := CheckFile(urlPrefix, vi.FilePath, mirrorWeight >= 0, client)
-
 			var record TestRecord
 			record.Standard = vi
 			mu.Lock()
@@ -620,7 +620,6 @@ func TestMirrorCommon(mirrorId, urlPrefix string, mirrorWeight int,
 				numErrs++
 				log.Warningf("Check file found error:%v", err)
 				record.Err = err
-
 			} else {
 				record.Result = validateInfo1
 				if vi.Equal(validateInfo1) {
@@ -656,7 +655,6 @@ func TestMirrorCommon(mirrorId, urlPrefix string, mirrorWeight int,
 func (checker *CDNChecker) TestMirror(mirrorId string, urlPrefix string, mirrorWeight int,
 	validateInfoList []*FileValidateInfo) []*TestResult {
 	log.Infof("Testing mirror:%q, Prefix:%q, Weight:%d", mirrorId, urlPrefix, mirrorWeight)
-
 	if mirrorId == "default" {
 		// is cdn
 		return checker.TestMirrorCdn(mirrorId, urlPrefix, validateInfoList)
@@ -742,8 +740,17 @@ func (checker *CDNChecker) TestAllMirrors(mirrors0 mirrors, validateInfoList []*
 		mirrorCopy := mirror
 		pool.JobQueue <- func() {
 			t1 := time.Now()
+			index := uuid.TimeUUID().String()
+			service.CreateOperation(model.MirrorOperation{
+				CreateDate: t1,
+				OperationType: model.SYNC,
+				MirrorId: mirror.Id,
+				Username: username,
+				Index: index,
+			})
 			testResult := checker.TestMirror(mirrorCopy.Id, mirrorCopy.GetUrlPrefix(),
 				mirrorCopy.Weight, validateInfoList)
+			service.UpdateMirrorStatus(index, model.SUCCESS)
 			TestMirrorFinish()
 			duration0 := time.Since(t0)
 			duration1 := time.Since(t1)
@@ -757,15 +764,6 @@ func (checker *CDNChecker) TestAllMirrors(mirrors0 mirrors, validateInfoList []*
 	}
 	pool.WaitAll()
 
-	for _, mirror := range mirrors0 {
-		service.CreateOperation(configs.GetMySQLClient(), model.MirrorOperation{
-			CreateDate: time.Now(),
-			OperationType: model.SYNC,
-			MirrorId: mirror.Id,
-			Username: username,
-		})
-	}
-
 	checker.PushAllMirrorsTestResults(testResults)
 }
 
@@ -773,6 +771,22 @@ func (checker *CDNChecker) Init(c *configs.CdnCheckerConf, username string) erro
 	checker.CheckTool = CheckTool{
 		Conf: c,
 	}
+
+	index := uuid.TimeUUID().String()
+	var opType string
+	if optMirror == "" {
+		opType = model.SYNC_ALL
+	} else {
+		opType = model.SYNC
+	}
+	service.CreateOperation(model.MirrorOperation{
+		Index: index,
+		CreateDate: time.Now(),
+		Username: username,
+		OperationType: opType,
+		MirrorId: optMirror,
+		Status: model.UNCHECK,
+	})
 
 	rand.Seed(time.Now().UnixNano())
 	flag.Parse()
@@ -866,7 +880,9 @@ func (checker *CDNChecker) Init(c *configs.CdnCheckerConf, username string) erro
 			log.Warningf("Fetch CDN DNS found error:%v", err)
 			return err
 		}
+		service.UpdateMirrorStatus(index, model.CHECKING)
 		checker.TestAllMirrors(mirrors, validateInfoList, username)
+		service.UpdateMirrorStatus(index, model.SUCCESS)
 	} else {
 		var mirror0 *Mirror
 		for _, mirror := range mirrors {
@@ -879,14 +895,9 @@ func (checker *CDNChecker) Init(c *configs.CdnCheckerConf, username string) erro
 			log.Errorf("Not found mirror:%v", optMirror)
 			return errors.New("No such mirror named:" + optMirror)
 		}
+		service.UpdateMirrorStatus(index, model.CHECKING)
 		checker.TestMirror(mirror0.Id, mirror0.GetUrlPrefix(), mirror0.Weight, validateInfoList)
-		service.CreateOperation(configs.GetMySQLClient(), model.MirrorOperation{
-			CreateDate: time.Now(),
-			OperationType: model.SYNC,
-			MirrorId: mirror0.Id,
-			Username: username,
-		})
-
+		service.UpdateMirrorStatus(index, model.SUCCESS)
 	}
 	return nil
 }
