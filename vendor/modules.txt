@@ -20,6 +20,7 @@ github.com/golang/protobuf/proto
 # github.com/gorilla/websocket v1.4.0
 github.com/gorilla/websocket
 # github.com/influxdata/influxdb v1.6.3
+github.com/influxdata/influxdb/uuid
 github.com/influxdata/influxdb/client/v2
 github.com/influxdata/influxdb/models
 github.com/influxdata/influxdb/pkg/escape
