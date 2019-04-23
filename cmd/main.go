@@ -6,8 +6,6 @@ import (
 	cdn_checker "mirrors_status/pkg/business/cdn-checker"
 	"mirrors_status/pkg/config"
 	"mirrors_status/pkg/log"
-	"mirrors_status/pkg/modules/db/influxdb"
-	"mirrors_status/pkg/modules/db/mysql"
 	"mirrors_status/pkg/modules/model"
 	"mirrors_status/pkg/modules/service"
 	"strconv"
@@ -15,8 +13,6 @@ import (
 
 type App struct {
 	serverConfig *configs.ServerConf
-	influxClient *influxdb.Client
-	mysqlClient *mysql.Client
 	cdnChecker *cdn_checker.CDNChecker
 }
 
@@ -29,22 +25,20 @@ func Init() (app App) {
 	}
 
 	configs.InitDB(*serverConfig)
-	app.influxClient = configs.GetInfluxdbClient()
-	app.mysqlClient = configs.GetMySQLClient()
 	app.cdnChecker = cdn_checker.NewCDNChecker(app.serverConfig.CdnChecker)
 	configs.InitScheme()
 	return
 }
 
 func(app App) GetAllMirrors(c *gin.Context) {
-	data := service.GetAllMirrors(app.influxClient)
+	data := service.GetAllMirrors()
 	c.JSON(200, gin.H{
 		"res": data,
 	})
 }
 
 func(app App) GetAllMirrorsCdn(c *gin.Context) {
-	data := service.GetAllMirrorsCdn(app.influxClient)
+	data := service.GetAllMirrorsCdn()
 	c.JSON(200, gin.H{
 		"res": data,
 	})
@@ -56,7 +50,7 @@ func (app App) AddMirror(c *gin.Context) {
 	if err != nil {
 		log.Errorf("Bind json found error:%v", err)
 	}
-	err = service.AddMirror(app.mysqlClient, app.influxClient, reqMirror)
+	err = service.AddMirror(reqMirror)
 	if err != nil {
 		log.Errorf("Insert data found error:%v", err)
 	}
@@ -71,7 +65,7 @@ func (app App) AddMirrorCdn(c *gin.Context) {
 	if err != nil {
 		log.Errorf("Bind json found error:%v", err)
 	}
-	err = service.AddMirrorCdn(app.mysqlClient, app.influxClient, reqMirrorCdn)
+	err = service.AddMirrorCdn(reqMirrorCdn)
 	if err != nil {
 		log.Errorf("Insert data found error:%v", err)
 	}
@@ -82,7 +76,7 @@ func (app App) AddMirrorCdn(c *gin.Context) {
 
 func (app App) TestApi(c *gin.Context) {
 	query := c.PostForm("query")
-	data := service.TestApi(app.influxClient, query)
+	data := service.TestApi(query)
 	c.JSON(200, gin.H{
 		"res": data,
 	})
@@ -123,7 +117,7 @@ func (app App) SyncMirror(c *gin.Context) {
 }
 
 func (app App) OperationHistory(c *gin.Context) {
-	data := service.GetOperationsByDateDesc(app.mysqlClient)
+	data := service.GetOperationsByDateDesc()
 	c.JSON(200, gin.H{
 		"history": data,
 	})
@@ -131,7 +125,7 @@ func (app App) OperationHistory(c *gin.Context) {
 
 func (app App) OperationHistoryByMirror(c *gin.Context) {
 	mirror := c.Param("mirror")
-	data := service.GetOperationsByMirror(app.mysqlClient, mirror)
+	data := service.GetOperationsByMirror(mirror)
 	c.JSON(200, gin.H{
 		"history": data,
 	})
