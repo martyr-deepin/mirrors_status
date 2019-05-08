@@ -3,13 +3,14 @@ package model
 import "time"
 
 type MirrorOperation struct {
-	Id            int `gorm:"primary_key"`
-	Index 		  string
-	CreateDate    time.Time
-	Username      string
-	OperationType string
-	MirrorId      string
-	Status        string
+	Id            int `gorm:"primary_key" json:"id"`
+	Index 		  string `json:"index"`
+	CreateDate    time.Time `json:"create_date"`
+	Username      string `json:"username"`
+	OperationType string `json:"operation_type"`
+	MirrorId      string `json:"mirror_id"`
+	Status        string `json:"status"`
+	Msg string
 }
 
 const (

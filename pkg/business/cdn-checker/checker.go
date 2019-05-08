@@ -750,7 +750,7 @@ func (checker *CDNChecker) TestAllMirrors(mirrors0 mirrors, validateInfoList []*
 			})
 			testResult := checker.TestMirror(mirrorCopy.Id, mirrorCopy.GetUrlPrefix(),
 				mirrorCopy.Weight, validateInfoList)
-			service.UpdateMirrorStatus(index, model.SUCCESS)
+			service.UpdateMirrorStatus(index, model.SUCCESS, "")
 			TestMirrorFinish()
 			duration0 := time.Since(t0)
 			duration1 := time.Since(t1)
@@ -767,12 +767,10 @@ func (checker *CDNChecker) TestAllMirrors(mirrors0 mirrors, validateInfoList []*
 	checker.PushAllMirrorsTestResults(testResults)
 }
 
-func (checker *CDNChecker) Init(c *configs.CdnCheckerConf, username string) error {
+func (checker *CDNChecker) Init(c *configs.CdnCheckerConf, username string, index string) error {
 	checker.CheckTool = CheckTool{
 		Conf: c,
 	}
-
-	index := uuid.TimeUUID().String()
 	var opType string
 	if optMirror == "" {
 		opType = model.SYNC_ALL
@@ -853,16 +851,19 @@ func (checker *CDNChecker) Init(c *configs.CdnCheckerConf, username string) erro
 	mirrors, err := GetUnpublishedMirrors(c.Target)
 	if err != nil {
 		log.Errorf("Get unpublished mirrors found error:%v", err)
+		service.UpdateMirrorStatus(index, model.FAILURE, err.Error())
 		return err
 	}
 
 	changeFiles, err := GetChangeFiles(*checker.CheckTool.Conf)
 	if err != nil {
 		log.Errorf("Get change files found error:%v", err)
+		service.UpdateMirrorStatus(index, model.FAILURE, err.Error())
 		return err
 	}
 
 	if len(changeFiles) == 0 {
+		service.UpdateMirrorStatus(index, model.FAILURE, err.Error())
 		return nil
 	}
 
@@ -871,6 +872,7 @@ func (checker *CDNChecker) Init(c *configs.CdnCheckerConf, username string) erro
 	validateInfoList, err := checker.GetValidateInfoList(changeFiles)
 	if err != nil {
 		log.Errorf("Get validate info list found error:%v", err)
+		service.UpdateMirrorStatus(index, model.FAILURE, err.Error())
 		return err
 	}
 
@@ -878,11 +880,12 @@ func (checker *CDNChecker) Init(c *configs.CdnCheckerConf, username string) erro
 		err = checker.PrefetchCdnDns(c.DefaultCdn)
 		if err != nil {
 			log.Warningf("Fetch CDN DNS found error:%v", err)
+			service.UpdateMirrorStatus(index, model.FAILURE, err.Error())
 			return err
 		}
-		service.UpdateMirrorStatus(index, model.CHECKING)
+		service.UpdateMirrorStatus(index, model.CHECKING, err.Error())
 		checker.TestAllMirrors(mirrors, validateInfoList, username)
-		service.UpdateMirrorStatus(index, model.SUCCESS)
+		service.UpdateMirrorStatus(index, model.SUCCESS, "")
 	} else {
 		var mirror0 *Mirror
 		for _, mirror := range mirrors {
@@ -893,20 +896,25 @@ func (checker *CDNChecker) Init(c *configs.CdnCheckerConf, username string) erro
 		}
 		if mirror0 == nil {
 			log.Errorf("Not found mirror:%v", optMirror)
+			service.UpdateMirrorStatus(index, model.FAILURE, "mirror not exist")
 			return errors.New("No such mirror named:" + optMirror)
 		}
-		service.UpdateMirrorStatus(index, model.CHECKING)
+		service.UpdateMirrorStatus(index, model.CHECKING, "")
 		checker.TestMirror(mirror0.Id, mirror0.GetUrlPrefix(), mirror0.Weight, validateInfoList)
-		service.UpdateMirrorStatus(index, model.SUCCESS)
+		service.UpdateMirrorStatus(index, model.SUCCESS, "")
 	}
 	return nil
 }
 
-func (checker *CDNChecker) CheckAllMirrors(c *configs.CdnCheckerConf, username string) error {
-	return checker.Init(c, username)
+func (checker *CDNChecker) CheckAllMirrors(c *configs.CdnCheckerConf, username string) string {
+	index := uuid.TimeUUID().String()
+	go checker.Init(c, username, index)
+	return index
 }
 
-func (checker *CDNChecker) CheckMirror(name string, c *configs.CdnCheckerConf, username string) error {
+func (checker *CDNChecker) CheckMirror(name string, c *configs.CdnCheckerConf, username string) string {
 	optMirror = name
-	return checker.Init(c, username)
+	index := uuid.TimeUUID().String()
+	go checker.Init(c, username, index)
+	return index
 }
