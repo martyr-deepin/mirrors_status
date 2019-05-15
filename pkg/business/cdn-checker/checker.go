@@ -543,7 +543,8 @@ func (checker *CDNChecker) TestMirrorCdn(mirrorId, urlPrefix string,
 	validateInfoList []*FileValidateInfo) []*TestResult {
 	u, err := url.Parse(urlPrefix)
 	if err != nil {
-		panic(err)
+		log.Errorf("URL prefix: %v", urlPrefix)
+		//panic(err)
 	}
 
 	ips := checker.GetCdnDns(u.Hostname())
@@ -740,17 +741,8 @@ func (checker *CDNChecker) TestAllMirrors(mirrors0 mirrors, validateInfoList []*
 		mirrorCopy := mirror
 		pool.JobQueue <- func() {
 			t1 := time.Now()
-			index := uuid.TimeUUID().String()
-			service.CreateOperation(model.MirrorOperation{
-				CreateDate: t1,
-				OperationType: model.SYNC,
-				MirrorId: mirror.Id,
-				Username: username,
-				Index: index,
-			})
 			testResult := checker.TestMirror(mirrorCopy.Id, mirrorCopy.GetUrlPrefix(),
 				mirrorCopy.Weight, validateInfoList)
-			service.UpdateMirrorStatus(index, model.SUCCESS, "")
 			TestMirrorFinish()
 			duration0 := time.Since(t0)
 			duration1 := time.Since(t1)
@@ -771,20 +763,6 @@ func (checker *CDNChecker) Init(c *configs.CdnCheckerConf, username string, inde
 	checker.CheckTool = CheckTool{
 		Conf: c,
 	}
-	var opType string
-	if optMirror == "" {
-		opType = model.SYNC_ALL
-	} else {
-		opType = model.SYNC
-	}
-	service.CreateOperation(model.MirrorOperation{
-		Index: index,
-		CreateDate: time.Now(),
-		Username: username,
-		OperationType: opType,
-		MirrorId: optMirror,
-		Status: model.UNCHECK,
-	})
 
 	rand.Seed(time.Now().UnixNano())
 	flag.Parse()
@@ -851,19 +829,16 @@ func (checker *CDNChecker) Init(c *configs.CdnCheckerConf, username string, inde
 	mirrors, err := GetUnpublishedMirrors(c.Target)
 	if err != nil {
 		log.Errorf("Get unpublished mirrors found error:%v", err)
-		service.UpdateMirrorStatus(index, model.FAILURE, err.Error())
 		return err
 	}
 
 	changeFiles, err := GetChangeFiles(*checker.CheckTool.Conf)
 	if err != nil {
 		log.Errorf("Get change files found error:%v", err)
-		service.UpdateMirrorStatus(index, model.FAILURE, err.Error())
 		return err
 	}
 
 	if len(changeFiles) == 0 {
-		service.UpdateMirrorStatus(index, model.FAILURE, err.Error())
 		return nil
 	}
 
@@ -872,7 +847,6 @@ func (checker *CDNChecker) Init(c *configs.CdnCheckerConf, username string, inde
 	validateInfoList, err := checker.GetValidateInfoList(changeFiles)
 	if err != nil {
 		log.Errorf("Get validate info list found error:%v", err)
-		service.UpdateMirrorStatus(index, model.FAILURE, err.Error())
 		return err
 	}
 
@@ -880,12 +854,10 @@ func (checker *CDNChecker) Init(c *configs.CdnCheckerConf, username string, inde
 		err = checker.PrefetchCdnDns(c.DefaultCdn)
 		if err != nil {
 			log.Warningf("Fetch CDN DNS found error:%v", err)
-			service.UpdateMirrorStatus(index, model.FAILURE, err.Error())
 			return err
 		}
-		service.UpdateMirrorStatus(index, model.CHECKING, err.Error())
+		service.UpdateMirrorStatus(index, model.CHECKING, "")
 		checker.TestAllMirrors(mirrors, validateInfoList, username)
-		service.UpdateMirrorStatus(index, model.SUCCESS, "")
 	} else {
 		var mirror0 *Mirror
 		for _, mirror := range mirrors {
@@ -895,26 +867,97 @@ func (checker *CDNChecker) Init(c *configs.CdnCheckerConf, username string, inde
 			}
 		}
 		if mirror0 == nil {
-			log.Errorf("Not found mirror:%v", optMirror)
-			service.UpdateMirrorStatus(index, model.FAILURE, "mirror not exist")
-			return errors.New("No such mirror named:" + optMirror)
+			return errors.New("No such mirror name: " + optMirror)
 		}
 		service.UpdateMirrorStatus(index, model.CHECKING, "")
 		checker.TestMirror(mirror0.Id, mirror0.GetUrlPrefix(), mirror0.Weight, validateInfoList)
-		service.UpdateMirrorStatus(index, model.SUCCESS, "")
 	}
 	return nil
 }
 
 func (checker *CDNChecker) CheckAllMirrors(c *configs.CdnCheckerConf, username string) string {
 	index := uuid.TimeUUID().String()
-	go checker.Init(c, username, index)
+	service.CreateOperation(model.MirrorOperation{
+		Index: index,
+		CreateDate: time.Now(),
+		Username: username,
+		OperationType: model.SYNC_ALL,
+		MirrorId: "ALL",
+		Status: model.UNCHECK,
+	})
+	go func() {
+		err := checker.Init(c, username, index)
+		if err != nil {
+			service.UpdateMirrorStatus(index, model.FAILURE, err.Error())
+		} else {
+			service.UpdateMirrorStatus(index, model.SUCCESS, "")
+		}
+	}()
 	return index
 }
 
 func (checker *CDNChecker) CheckMirror(name string, c *configs.CdnCheckerConf, username string) string {
 	optMirror = name
 	index := uuid.TimeUUID().String()
-	go checker.Init(c, username, index)
+	service.CreateOperation(model.MirrorOperation{
+		Index: index,
+		CreateDate: time.Now(),
+		Username: username,
+		OperationType: model.SYNC,
+		MirrorId: name,
+		Status: model.UNCHECK,
+	})
+	go func() {
+		err := checker.Init(c, username, index)
+		if err != nil {
+			service.UpdateMirrorStatus(index, model.FAILURE, err.Error())
+		} else {
+			service.UpdateMirrorStatus(index, model.SUCCESS, "")
+		}
+	}()
+	return index
+}
+
+type MirrorReq struct {
+	MirrorName string `json:"mirror_name"`
+	IsKey bool `json:"is_key"`
+}
+
+type MirrorsReq struct {
+	Upstream string `json:"upstream"`
+	Mirrors []MirrorReq `json:"mirrors"`
+}
+
+func (checker *CDNChecker) CheckMirrorsByUpstream(mirrors MirrorsReq, c *configs.CdnCheckerConf, username string) string {
+	index := uuid.TimeUUID().String()
+	service.CreateOperation(model.MirrorOperation{
+		Index: index,
+		CreateDate: time.Now(),
+		Username: username,
+		OperationType: model.SYNC_UPSTREAM,
+		MirrorId: mirrors.Upstream,
+		Status: model.UNCHECK,
+
+		Total: len(mirrors.Mirrors),
+	})
+	go func() {
+		for _, mirror := range mirrors.Mirrors {
+			optMirror = mirror.MirrorName
+			err := checker.Init(c, username, index)
+			if err != nil {
+				log.Infof("Sync mirror found error: %#v", err)
+				if mirror.IsKey {
+					service.UpdateMirrorTaskMsg(index, err.Error())
+					service.SyncMirrorFailedOnce(index)
+					continue
+				}
+			}
+			service.SyncMirrorFinishOnce(index)
+		}
+		operation, _ := service.GetOperationByIndex(index)
+		if (operation.Total <= operation.Failed + operation.Finish) && operation.Failed <= 0 {
+			service.UpdateMirrorStatus(index, model.SUCCESS, "")
+		}
+	}()
 	return index
 }

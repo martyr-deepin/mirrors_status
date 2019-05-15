@@ -135,6 +135,20 @@ func (app App) GetOperationByIndex(c *gin.Context) {
 	})
 }
 
+func (app App) CheckMirrorsByUpstream(c *gin.Context) {
+	username := c.Param("username")
+	var mirrors cdn_checker.MirrorsReq
+	err := c.BindJSON(&mirrors)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"msg": err.Error()})
+		return
+	}
+	index := app.cdnChecker.CheckMirrorsByUpstream(mirrors, app.serverConfig.CdnChecker, username)
+	c.JSON(http.StatusAccepted, gin.H{
+		"index": index,
+	})
+}
+
 func main() {
 	app := Init()
 	r := gin.Default()
@@ -154,11 +168,14 @@ func main() {
 
 	r.GET("/check/:username/:mirror", app.SyncMirror)
 
+	r.POST("/check/:username", app.CheckMirrorsByUpstream)
+
 	r.GET("/history", app.OperationHistory)
 
 	r.GET("/history/:mirror", app.OperationHistoryByMirror)
 
 	r.GET("/operation/:index", app.GetOperationByIndex)
+
 
 	r.Run(":" + strconv.Itoa(app.serverConfig.Http.Port))
 }

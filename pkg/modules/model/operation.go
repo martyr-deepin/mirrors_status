@@ -10,16 +10,19 @@ type MirrorOperation struct {
 	OperationType string `json:"operation_type"`
 	MirrorId      string `json:"mirror_id"`
 	Status        string `json:"status"`
-	Msg string
+	Msg string	`json:"msg"`
+	
+	Failed int `json:"failed"`
+	Finish int `json:"finish"`
+	Total int `json:"total"`
 }
 
 const (
 	ADD    = "ADD"
 	DELETE = "DELETE"
-	UPDATE = "UPDATE"
-	QUERY  = "QUERY"
 	SYNC   = "SYNC"
 	SYNC_ALL = "SYNC ALL"
+	SYNC_UPSTREAM = "SYNC UPSTREAM"
 	UNCHECK = "UNCHECK"
 	CHECKING = "CHECKING"
 	FAILURE = "FAILURE"

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/jinzhu/gorm"
 	"mirrors_status/pkg/config"
 	"mirrors_status/pkg/log"
 	"mirrors_status/pkg/modules/model"
@@ -45,5 +46,20 @@ func UpdateMirrorStatus(index string, status string, msg string) {
 
 func GetOperationByIndex(index string) (op model.MirrorOperation, err error) {
 	err = configs.GetMySQLClient().DB.Table("mirror_operations").Where("`index` = ?", index).Find(&op).Error
+	return
+}
+
+func SyncMirrorFinishOnce(index string) (err error) {
+	err = configs.GetMySQLClient().DB.Table("mirror_operations").Where("`index` = ?", index).Update("finish", gorm.Expr("finish + ?", 1)).Error
+	return
+}
+
+func SyncMirrorFailedOnce(index string) (err error) {
+	err = configs.GetMySQLClient().DB.Table("mirror_operations").Where("`index` = ?", index).Update("failed", gorm.Expr("failed + ?", 1)).Error
+	return
+}
+
+func UpdateMirrorTaskMsg(index, msg string) (err error) {
+	err = configs.GetMySQLClient().DB.Table("mirror_operations").Where("`index` = ?", index).Update("msg", msg).Error
 	return
 }
