@@ -8,7 +8,9 @@ import (
 	"mirrors_status/pkg/log"
 	"mirrors_status/pkg/modules/model"
 	"mirrors_status/pkg/modules/service"
+	"net/http"
 	"strconv"
+
 )
 
 type App struct {
@@ -85,16 +87,9 @@ func (app App) TestApi(c *gin.Context) {
 func (app App) SyncAllMirrors(c *gin.Context) {
 	username := c.Param("username")
 	log.Infof("User:%s trying sync all mirrors")
-	err := app.cdnChecker.CheckAllMirrors(app.serverConfig.CdnChecker, username)
-	if err != nil {
-		log.Errorf("Sync all mirror found error:%v", err)
-		c.JSON(400, gin.H{
-			"res": err.Error(),
-		})
-		return
-	}
-	c.JSON(200, gin.H{
-		"res": "success",
+	index := app.cdnChecker.CheckAllMirrors(app.serverConfig.CdnChecker, username)
+	c.JSON(http.StatusAccepted, gin.H{
+		"index": index,
 	})
 }
 
@@ -103,22 +98,15 @@ func (app App) SyncMirror(c *gin.Context) {
 	username := c.Param("username")
 
 	log.Infof("Username:%s, Mirror ID:%s", username, mirrorName)
-	err := app.cdnChecker.CheckMirror(mirrorName, app.serverConfig.CdnChecker, username)
-	if err != nil {
-		log.Errorf("Sync mirror found error:%v", err)
-		c.JSON(400, gin.H{
-			"res": err.Error(),
-		})
-		return
-	}
-	c.JSON(200, gin.H{
-		"res": "success",
+	index := app.cdnChecker.CheckMirror(mirrorName, app.serverConfig.CdnChecker, username)
+	c.JSON(http.StatusAccepted, gin.H{
+		"index": index,
 	})
 }
 
 func (app App) OperationHistory(c *gin.Context) {
 	data := service.GetOperationsByDateDesc()
-	c.JSON(200, gin.H{
+	c.JSON(http.StatusOK, gin.H{
 		"history": data,
 	})
 }
@@ -126,8 +114,38 @@ func (app App) OperationHistory(c *gin.Context) {
 func (app App) OperationHistoryByMirror(c *gin.Context) {
 	mirror := c.Param("mirror")
 	data := service.GetOperationsByMirror(mirror)
-	c.JSON(200, gin.H{
+	c.JSON(http.StatusOK, gin.H{
 		"history": data,
+	})
+}
+
+func (app App) GetOperationByIndex(c *gin.Context) {
+	index := c.Param("index")
+	log.Info(index)
+	data, err := service.GetOperationByIndex(index)
+	if err != nil {
+		log.Infof("%#v", err)
+		c.JSON(http.StatusNoContent, gin.H{
+			"msg": "get operation data found error",
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"operation": data,
+	})
+}
+
+func (app App) CheckMirrorsByUpstream(c *gin.Context) {
+	username := c.Param("username")
+	var mirrors cdn_checker.MirrorsReq
+	err := c.BindJSON(&mirrors)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"msg": err.Error()})
+		return
+	}
+	index := app.cdnChecker.CheckMirrorsByUpstream(mirrors, app.serverConfig.CdnChecker, username)
+	c.JSON(http.StatusAccepted, gin.H{
+		"index": index,
 	})
 }
 
@@ -150,9 +168,14 @@ func main() {
 
 	r.GET("/check/:username/:mirror", app.SyncMirror)
 
+	r.POST("/check/:username", app.CheckMirrorsByUpstream)
+
 	r.GET("/history", app.OperationHistory)
 
 	r.GET("/history/:mirror", app.OperationHistoryByMirror)
+
+	r.GET("/operation/:index", app.GetOperationByIndex)
+
 
 	r.Run(":" + strconv.Itoa(app.serverConfig.Http.Port))
 }
