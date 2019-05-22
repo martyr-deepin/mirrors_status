@@ -1,0 +1,31 @@
+publish_mirrors:
+  - name: dstore mirror
+    jobs:
+      - name: dstore-mirror-json_test
+        url: https://ci.deepin.io/view/~test/job/lastore-json-mirror_test
+        token: token
+        description: 发布镜像源列表
+repositories:
+  - name: community
+    jobs:
+      - name: sync_repo_community_test
+        url: https://ci.deepin.io/view/~test/job/sync_repo_community_test
+        token: token
+        description: 同步仓库数据
+      - name: sync_repo_community_test-delete
+        url: https://ci.deepin.io/view/~test/job/sync_repo_community_test-delete
+        token: token
+        description: 同步仓库索引
+  - name: professional
+    jobs:
+      - name: sync_repo_community_test
+        url: https://ci.deepin.io/view/~test/job/sync_repo_community_test
+        token: token
+        description: 同步仓库
+  - name: test
+    jobs:
+      - name: test
+        url: https://ci.deepin.io/view/~test/job/sync_repo_community_test/
+        job: sync_repo_community_test
+        token: token
+        description: 测试

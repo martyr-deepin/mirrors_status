@@ -1,6 +1,7 @@
 .vscode
 bin/
 configs/config.yml
+configs/jenkins.yml
 /.idea
 result
 /mirrors_status

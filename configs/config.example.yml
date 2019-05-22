@@ -10,7 +10,7 @@ influxdb:
   username: admin
 
 mysql:
-  host: db
+  host: client
   port: 3306
   dbName: mirror_status
   username: root
@@ -31,3 +31,28 @@ cdn-checker:
   source-url: http://packages.deepin.com/deepin/
   # URL path to get source change list
   source-path: changelist/
+
+ldap:
+  server: 0.ldap.sndu.cn
+  port: 636
+  bind_dn: cn=cms,ou=manage,dc=sndu,dc=cn
+  bind_passwd: 4w#WgAv9Q%
+  user_search: ou=people,dc=sndu,dc=cn
+  group_search: cn=logs,ou=group,dc=sndu,dc=cn
+
+jenkins:
+  addr: https://ci.deepin.io
+  trigger: dstore-mirror-json token
+
+mail:
+  host: smtp.exmail.qq.com
+  port: 465
+  username: zhaojuwen@deepin.com
+  password: ckv2cFb2DGdFeqhX
+
+redis:
+  host: localhost
+  port: 6379
+  username:
+  password:
+  db: 0
