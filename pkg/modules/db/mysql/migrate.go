@@ -5,5 +5,5 @@ import (
 )
 
 func MigrateTables(client *Client) {
-	client.DB.Debug().AutoMigrate(model.MirrorOperation{})
+	client.DB.Debug().AutoMigrate(model.MirrorOperation{}, model.Mirror{}, )
 }

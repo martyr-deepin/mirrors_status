@@ -6,6 +6,7 @@ import (
 	"mirrors_status/pkg/log"
 	"mirrors_status/pkg/modules/db/influxdb"
 	"mirrors_status/pkg/modules/db/mysql"
+	"mirrors_status/pkg/modules/db/redis"
 )
 
 type InfluxDBConf struct {
@@ -40,11 +41,44 @@ type CdnCheckerConf struct {
 	SourcePath string `yaml:"source-path"`
 }
 
+type LdapConf struct {
+	Server string `yml:"server"`
+	Port int `yml:"port"`
+	BindDn string `yml:"bind_dn"`
+	BindPasswd string `yml:"bind_passwd"`
+	UserSearch string `yml:"user_search"`
+	GroupSearch string `yml:"group_search"`
+}
+
+type MailConf struct {
+	Host string `yml:"host"`
+	Port int `yml:"port"`
+	Username string `yml:"username"`
+	Password string `yml:"password"`
+}
+
+type JenkinsConf struct {
+	Addr string `yml:"addr"`
+	Trigger string `yml:"trigger"`
+}
+
+type RedisConf struct {
+	Host string `yml:"host"`
+	Port int `yml:"port"`
+	Username string `yml:"username"`
+	Password string `yml:"password"`
+	DBName int `yml:"db"`
+}
+
 type ServerConf struct {
 	InfluxDB *InfluxDBConf `yaml:"influxdb"`
 	MySQLDB *MySQLConf `yaml:"mysql"`
 	Http     *HttpConf     `yaml:"http"`
 	CdnChecker *CdnCheckerConf `yaml:"cdn-checker"`
+	Ldap *LdapConf `yml:"ldap"`
+	Mail *MailConf `yml:"mail"`
+	Jenkins *JenkinsConf `yml:"jenkins"`
+	Redis *RedisConf `yml:"redis"`
 }
 
 func (c *ServerConf) ErrHandler(op string, err error) {
@@ -67,6 +101,7 @@ func (c *ServerConf) GetConfig() *ServerConf {
 var (
 	InfluxdbClient *influxdb.Client
 	MysqlClient *mysql.Client
+	RedisClient *redis.Client
 )
 
 func GetInfluxdbClient() *influxdb.Client {
@@ -77,8 +112,12 @@ func GetMySQLClient() *mysql.Client {
 	return MysqlClient
 }
 
+func GetRedisClient() *redis.Client {
+	return RedisClient
+}
+
 func InitInfluxdbClient(host string, port int, dbname, username, password string) error {
-	log.Infof("trying connecting influxdb:%s:%s %s %s %s", host, port, dbname, username, password)
+	log.Infof("trying connecting influxdb:%s:%d %s %s %s", host, port, dbname, username, password)
 	InfluxdbClient = &influxdb.Client{
 		Host:     host,
 		Port:     port,
@@ -90,7 +129,7 @@ func InitInfluxdbClient(host string, port int, dbname, username, password string
 }
 
 func InitMySQLClient(host string, port int, dbname, username, password string) error {
-	log.Infof("trying connecting MySQL:%s:%s %s %s %s", host, port, dbname, username, password)
+	log.Infof("trying connecting MySQL:%s:%d %s %s %s", host, port, dbname, username, password)
 	MysqlClient = &mysql.Client{
 		Host:     host,
 		Port:     port,
@@ -99,6 +138,18 @@ func InitMySQLClient(host string, port int, dbname, username, password string) e
 		Password: password,
 	}
 	return MysqlClient.NewMySQLClient()
+}
+
+func InitRedisClient(host string, port int, username, password string, db int) error {
+	log.Infof("trying connecting Redis:%s:%d", host, port)
+	RedisClient = &redis.Client{
+		Host: host,
+		Port: port,
+		Username: username,
+		Password: password,
+		DBName: db,
+	}
+	return RedisClient.NewRedisClient()
 }
 
 func InitDB(config ServerConf) {
@@ -110,7 +161,7 @@ func InitDB(config ServerConf) {
 
 	err := InitInfluxdbClient(host, port, dbName, username, password)
 	if err != nil {
-		log.Errorf("Err connecting influxdb:%v", config.InfluxDB)
+		log.Errorf("Connecting influxdb:%v found error:%v", config.InfluxDB, err)
 	}
 
 	host = config.MySQLDB.Host
@@ -121,7 +172,17 @@ func InitDB(config ServerConf) {
 
 	err = InitMySQLClient(host, port, dbName, username, password)
 	if err != nil {
-		log.Errorf("Err connecting MySQL:%v", config.MySQLDB)
+		log.Errorf("Connecting MySQL:%v found error:%v", config.MySQLDB, err)
+	}
+
+	host = config.Redis.Host
+	port = config.Redis.Port
+	username = config.Redis.Username
+	password = config.Redis.Password
+	db := config.Redis.DBName
+	err = InitRedisClient(host, port, username, password, db)
+	if err != nil {
+		log.Errorf("Connecting Redis:%v found error:%v", config.Redis, err)
 	}
 }
 
