@@ -6,5 +6,6 @@ configs/jenkins.yml
 result
 /mirrors_status
 config.yml
+jenkins.yml
 result
 /web
