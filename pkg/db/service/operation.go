@@ -38,7 +38,7 @@ func DelOperationByUsername(username string) {
 	configs.GetMySQLClient().DB.Debug().Table("mirror_operations").Where("username=?", username).Delete(&model.MirrorOperation{})
 }
 
-func UpdateMirrorStatus(index string, status string, msg string) {
+func UpdateMirrorStatus(index string, status model.MirrorOperationStatus, msg string) {
 	var operation model.MirrorOperation
 	configs.GetMySQLClient().DB.Table("mirror_operations").Where("`index` = ?", index).Find(&operation)
 	configs.GetMySQLClient().DB.Table("mirror_operations").Model(&operation).Update("status", status).Update("msg", msg)

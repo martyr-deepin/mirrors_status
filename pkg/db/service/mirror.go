@@ -91,3 +91,8 @@ func (m *MirrorService) GetMirrorUpstreams() (upstreamList configs.RepositoryInf
 	}
 	return upstreamList
 }
+
+func (m *MirrorService) MultiGetByIndices(mirrorIndices []int) (mirrors []model.Mirror, err error) {
+	err = m.client.DB.Table("mirrors").Where("`index` in (?)", mirrorIndices).Find(&mirrors).Error
+	return
+}

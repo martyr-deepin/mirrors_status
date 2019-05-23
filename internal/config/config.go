@@ -61,6 +61,8 @@ type MailConf struct {
 type JenkinsConf struct {
 	Addr string `yml:"addr"`
 	Trigger string `yml:"trigger"`
+	Delay int `yml:"delay"`
+	Retry int `yml:"retry"`
 }
 
 type RedisConf struct {
@@ -75,7 +77,7 @@ type ServerConf struct {
 	InfluxDB *InfluxDBConf `yaml:"influxdb"`
 	MySQLDB *MySQLConf `yaml:"mysql"`
 	Http     *HttpConf     `yaml:"http"`
-	CdnChecker *CdnCheckerConf `yaml:"checker"`
+	CdnChecker *CdnCheckerConf `yaml:"cdn-checker"`
 	Ldap *LdapConf `yml:"ldap"`
 	Mail *MailConf `yml:"mail"`
 	Jenkins *JenkinsConf `yml:"jenkins"`
@@ -88,7 +90,7 @@ func ErrHandler(op string, err error) {
 	}
 }
 
-func NewServerConfig() ServerConf {
+func NewServerConfig() *ServerConf {
 	var serverConf ServerConf
 	log.Info("Loading server configs")
 	ymlFile, err := ioutil.ReadFile("configs/config.yml")
@@ -97,7 +99,7 @@ func NewServerConfig() ServerConf {
 	err = yaml.Unmarshal(ymlFile, &serverConf)
 	ErrHandler("unmarshal yaml", err)
 
-	return serverConf
+	return &serverConf
 }
 
 var (
@@ -195,4 +197,15 @@ func InitDB(config ServerConf) {
 
 func InitScheme() {
 	mysql.MigrateTables(MysqlClient)
+}
+
+func InitMailClient(conf *MailConf) {
+	log.Infof("Trying connecting mail server:%s:%d %s", conf.Host, conf.Port, conf.Username)
+	MailDialer = &gomail.Dialer{
+		Host: conf.Host,
+		Port: conf.Port,
+		Username: conf.Username,
+		Password: conf.Password,
+		SSL: true,
+	}
 }

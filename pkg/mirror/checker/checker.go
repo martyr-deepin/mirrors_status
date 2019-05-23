@@ -759,9 +759,9 @@ func (checker *CDNChecker) TestAllMirrors(mirrors0 mirrors, validateInfoList []*
 	checker.PushAllMirrorsTestResults(testResults)
 }
 
-func (checker *CDNChecker) Init(c *configs.CdnCheckerConf, username string, index string) error {
+func (checker *CDNChecker) Init(username string, index string) error {
 	checker.CheckTool = CheckTool{
-		Conf: c,
+		Conf: configs.NewServerConfig().CdnChecker,
 	}
 
 	rand.Seed(time.Now().UnixNano())
@@ -826,7 +826,7 @@ func (checker *CDNChecker) Init(c *configs.CdnCheckerConf, username string, inde
 		maxNumOfRetries = 4
 	}
 	// Get unpublished mirror list
-	mirrors, err := GetUnpublishedMirrors(c.Target)
+	mirrors, err := GetUnpublishedMirrors(configs.NewServerConfig().CdnChecker.Target)
 	if err != nil {
 		log.Errorf("Get unpublished mirrors found error:%v", err)
 		return err
@@ -851,12 +851,12 @@ func (checker *CDNChecker) Init(c *configs.CdnCheckerConf, username string, inde
 	}
 
 	if optMirror == "" {
-		err = checker.PrefetchCdnDns(c.DefaultCdn)
+		err = checker.PrefetchCdnDns(configs.NewServerConfig().CdnChecker.DefaultCdn)
 		if err != nil {
 			log.Warningf("Fetch CDN DNS found error:%v", err)
 			return err
 		}
-		service.UpdateMirrorStatus(index, model.CHECKING, "")
+		service.UpdateMirrorStatus(index, model.STATUS_RUNNING, "")
 		checker.TestAllMirrors(mirrors, validateInfoList, username)
 	} else {
 		var mirror0 *Mirror
@@ -869,13 +869,13 @@ func (checker *CDNChecker) Init(c *configs.CdnCheckerConf, username string, inde
 		if mirror0 == nil {
 			return errors.New("No such mirror name: " + optMirror)
 		}
-		service.UpdateMirrorStatus(index, model.CHECKING, "")
+		service.UpdateMirrorStatus(index, model.STATUS_RUNNING, "")
 		checker.TestMirror(mirror0.Id, mirror0.GetUrlPrefix(), mirror0.Weight, validateInfoList)
 	}
 	return nil
 }
 
-func (checker *CDNChecker) CheckAllMirrors(c *configs.CdnCheckerConf, username string) string {
+func (checker *CDNChecker) CheckAllMirrors(username string) string {
 	index := uuid.TimeUUID().String()
 	service.CreateOperation(model.MirrorOperation{
 		Index:         index,
@@ -883,20 +883,20 @@ func (checker *CDNChecker) CheckAllMirrors(c *configs.CdnCheckerConf, username s
 		Username:      username,
 		OperationType: model.SYNC_ALL,
 		MirrorId:      "ALL",
-		Status:        model.UNCHECK,
+		Status:        model.STATUS_WAITING,
 	})
 	go func() {
-		err := checker.Init(c, username, index)
+		err := checker.Init(username, index)
 		if err != nil {
-			service.UpdateMirrorStatus(index, model.FAILURE, err.Error())
+			service.UpdateMirrorStatus(index, model.STATUS_FAILURE, err.Error())
 		} else {
-			service.UpdateMirrorStatus(index, model.SUCCESS, "")
+			service.UpdateMirrorStatus(index, model.STATUS_FINISHED, "")
 		}
 	}()
 	return index
 }
 
-func (checker *CDNChecker) CheckMirror(name string, c *configs.CdnCheckerConf, username string) string {
+func (checker *CDNChecker) CheckMirror(name, username string) string {
 	optMirror = name
 	index := uuid.TimeUUID().String()
 	service.CreateOperation(model.MirrorOperation{
@@ -905,45 +905,34 @@ func (checker *CDNChecker) CheckMirror(name string, c *configs.CdnCheckerConf, u
 		Username:      username,
 		OperationType: model.SYNC,
 		MirrorId:      name,
-		Status:        model.UNCHECK,
+		Status:        model.STATUS_WAITING,
 	})
 	go func() {
-		err := checker.Init(c, username, index)
+		err := checker.Init(username, index)
 		if err != nil {
-			service.UpdateMirrorStatus(index, model.FAILURE, err.Error())
+			service.UpdateMirrorStatus(index, model.STATUS_FAILURE, err.Error())
 		} else {
-			service.UpdateMirrorStatus(index, model.SUCCESS, "")
+			service.UpdateMirrorStatus(index, model.STATUS_FINISHED, "")
 		}
 	}()
 	return index
 }
 
-type MirrorReq struct {
-	MirrorName string `json:"mirror_name"`
-	IsKey bool `json:"is_key"`
-}
-
-type MirrorsReq struct {
-	Upstream string `json:"upstream"`
-	Mirrors []MirrorReq `json:"mirrors"`
-}
-
-func (checker *CDNChecker) CheckMirrorsByUpstream(mirrors MirrorsReq, c *configs.CdnCheckerConf, username string) string {
+func (checker *CDNChecker) CheckMirrors(mirrors []model.Mirror, username string) string {
 	index := uuid.TimeUUID().String()
 	service.CreateOperation(model.MirrorOperation{
 		Index:         index,
 		CreateDate:    time.Now(),
 		Username:      username,
 		OperationType: model.SYNC_UPSTREAM,
-		MirrorId:      mirrors.Upstream,
-		Status:        model.UNCHECK,
-
-		Total: len(mirrors.Mirrors),
+		Status:        model.STATUS_WAITING,
+		Total: len(mirrors),
 	})
 	go func() {
-		for _, mirror := range mirrors.Mirrors {
-			optMirror = mirror.MirrorName
-			err := checker.Init(c, username, index)
+		for _, mirror := range mirrors {
+			optMirror = mirror.Id
+			log.Infof("Before init mirror check by upstream")
+			err := checker.Init(username, index)
 			if err != nil {
 				log.Infof("Sync mirror found error: %#v", err)
 				if mirror.IsKey {
@@ -956,7 +945,7 @@ func (checker *CDNChecker) CheckMirrorsByUpstream(mirrors MirrorsReq, c *configs
 		}
 		operation, _ := service.GetOperationByIndex(index)
 		if (operation.Total <= operation.Failed + operation.Finish) && operation.Failed <= 0 {
-			service.UpdateMirrorStatus(index, model.SUCCESS, "")
+			service.UpdateMirrorStatus(index, model.STATUS_FINISHED, "")
 		}
 	}()
 	return index

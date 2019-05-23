@@ -92,5 +92,5 @@ type Mirror struct {
 	Tags  string  `gorm:"type:varchar(64)" json:"tags"`
 	Extra JSON `sql:"type:json" json:"extra,omitempty"`
 	//ExtraBody ExtField `sql:"-"`
-	IsKey bool `gorm:"type:boolean" json:"is_key"`
+	IsKey bool `gorm:"default:false" json:"is_key"`
 }

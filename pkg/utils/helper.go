@@ -2,14 +2,13 @@ package utils
 
 import (
 	"github.com/gin-gonic/gin"
-	"mirrors_status/pkg/model"
 )
 
 type M map[string]interface{}
 
 func ResponseHelper(m M) gin.H {
 	return gin.H{
-		"code":  model.SUCCESS,
+		"code":  SUCCESS,
 		"data":  m,
 		"error": "",
 	}
