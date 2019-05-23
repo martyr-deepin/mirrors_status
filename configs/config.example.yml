@@ -3,17 +3,17 @@ http:
   port: 8080
 
 influxdb:
-  host: 10.0.10.70
-  port: 18901
-  dbName: mirror_status
-  password: deepinadmin
+  host: 127.0.0.1
+  port: 5432
+  dbName: influx
+  password: deepin
   username: admin
 
 mysql:
-  host: db
+  host: 127.0.0.1
   port: 3306
-  dbName: mirror_status
-  username: root
+  dbName: mysql
+  username: deepin
   password: admin
 
 cdn-checker:
@@ -31,3 +31,36 @@ cdn-checker:
   source-url: http://packages.deepin.com/deepin/
   # URL path to get source change list
   source-path: changelist/
+
+# LDAP configs
+ldap:
+  server: 0.ldap.deepin.cn
+  port: 636
+  bind_dn: cn=cms,ou=manage,dc=sndu,dc=cn
+  bind_passwd: password
+  user_search: search
+  group_search: search
+
+# Trigger information related to jenkins.yml
+jenkins:
+  addr: https://ci.deepin.io
+  trigger: dstore-mirror-json token
+  delay: 2
+  retry: 3
+
+# Mail proxy configs
+mail:
+  host: smtp.exmail.qq.com
+  port: 465
+  username: example@deepin.com
+  # Credential but not password of mail account
+  password: password
+
+# Redis config
+redis:
+  host: localhost
+  port: 6379
+  username:
+  password:
+  # Redis database index
+  db: 0

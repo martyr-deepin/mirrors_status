@@ -13,6 +13,14 @@ github.com/gin-gonic/gin
 github.com/gin-gonic/gin/binding
 github.com/gin-gonic/gin/json
 github.com/gin-gonic/gin/render
+# github.com/go-redis/redis v6.15.2+incompatible
+github.com/go-redis/redis
+github.com/go-redis/redis/internal
+github.com/go-redis/redis/internal/consistenthash
+github.com/go-redis/redis/internal/hashtag
+github.com/go-redis/redis/internal/pool
+github.com/go-redis/redis/internal/proto
+github.com/go-redis/redis/internal/util
 # github.com/go-sql-driver/mysql v1.4.1
 github.com/go-sql-driver/mysql
 # github.com/golang/protobuf v1.3.1
@@ -20,8 +28,8 @@ github.com/golang/protobuf/proto
 # github.com/gorilla/websocket v1.4.0
 github.com/gorilla/websocket
 # github.com/influxdata/influxdb v1.6.3
-github.com/influxdata/influxdb/uuid
 github.com/influxdata/influxdb/client/v2
+github.com/influxdata/influxdb/uuid
 github.com/influxdata/influxdb/models
 github.com/influxdata/influxdb/pkg/escape
 # github.com/ivpusic/grpool v1.0.0
@@ -50,8 +58,12 @@ golang.org/x/net/html/atom
 golang.org/x/sys/unix
 # google.golang.org/appengine v1.4.0
 google.golang.org/appengine/cloudsql
+# gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc
+gopkg.in/alexcesaro/quotedprintable.v3
 # gopkg.in/go-playground/validator.v8 v8.18.2
 gopkg.in/go-playground/validator.v8
+# gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
+gopkg.in/gomail.v2
 # gopkg.in/yaml.v2 v2.2.2
 gopkg.in/yaml.v2
 # gopkg.in/yaml.v3 v3.0.0-20190409140830-cdc409dda467
