@@ -6,14 +6,15 @@ import (
 )
 
 func InitGuestController(engine *gin.Engine) {
-	r := engine.Group("/")
+	r := engine.Group("/api/v1")
+
 	r.GET("/mirrors", controller.GetAllMirrors)
 	r.GET("/mirrors/:upstream", controller.GetMirrorsByUpstream)
 	r.GET("/upstream", controller.GetAllUpstreams)
 }
 
 func InitAdminController(engine *gin.Engine) {
-	r := engine.Group("/admin")
+	r := engine.Group("/api/v1/admin")
 
 	r.POST("/mirrors", controller.CreateMirror)
 	r.DELETE("/mirrors/:id", controller.DeleteMirror)

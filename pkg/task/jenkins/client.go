@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	configs "mirrors_status/internal/config"
+	"mirrors_status/internal/log"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 type BuildInfo struct {
@@ -23,12 +25,14 @@ type BuildInfo struct {
 }
 
 type QueueInfo struct {
-	Number int    `json:"number"`
-	URL    string `json:"url"`
-	Result string `json:"result"`
+	Executable struct {
+		Number int    `json:"number"`
+		URL    string `json:"url"`
+		//Result string `json:"result"`
+	} `json:"executable"`
 }
 
-func TriggerBuild(job *configs.JobInfo, params map[string]string) (int, error) {
+func TriggerBuild(job *configs.JobInfo, params map[string]string, abort <-chan bool) (int, error) {
 	values := url.Values{}
 	values.Set("token", job.Token)
 	for k, v := range params {
@@ -56,12 +60,28 @@ func TriggerBuild(job *configs.JobInfo, params map[string]string) (int, error) {
 		return -1, fmt.Errorf("Info: %s, reason: %s",
 			resp.Status, string(data))
 	}
+	var buildID int
+	var timer = time.NewTimer(time.Second * 3)
+	for {
+		select {
+		case <-timer.C:
+			queueInfo, err := GetQueueInfo(resp.Header.Get("Location"))
+			log.Infof("%v", resp.Header)
+			if err != nil {
+				return -1, err
+			}
+			log.Infof("Number %d", queueInfo.Executable.Number)
+			if queueInfo.Executable.Number != 0 {
+				buildID = queueInfo.Executable.Number
+				return buildID, nil
+			}
+			timer.Reset(time.Second * 10)
+		case <-abort:
+			return  buildID, nil
+		}
 
-	queueInfo, err := GetQueueInfo(resp.Header.Get("Location"))
-	if err != nil {
-		return -1, err
 	}
-	return queueInfo.Number, nil
+	//return buildID, nil
 }
 
 func LastBuildInfo(job *configs.JobInfo) (*BuildInfo, error) {
@@ -75,6 +95,7 @@ func GetBuildInfo(job *configs.JobInfo, id int) (*BuildInfo, error) {
 	}
 
 	resp, err := http.Get(fmt.Sprintf("%s/%s/api/json", job.URL, idStr))
+	log.Info(job.URL, idStr)
 	if err != nil {
 		return nil, err
 	}
@@ -103,12 +124,16 @@ func GetBuildInfo(job *configs.JobInfo, id int) (*BuildInfo, error) {
 }
 
 func GetQueueInfo(queueURL string) (*QueueInfo, error) {
-	// Exchange protocol from HTTP to HTTPS due to bugs in Jenkins
-	// if match, _ := regexp.MatchString("^https*", queueURL); !match {
-	// 	queueURL = "https" + string([]byte(queueURL)[4:])
-	// }
+	u, _ := url.Parse(queueURL)
+	log.Infof(u.Scheme)
+	if u.Scheme == "http" {
+		u.Scheme = "https"
+		queueURL = u.String()
+	}
+	log.Info(queueURL)
 	resp, err := http.Get(queueURL + "/api/json")
 	if err != nil {
+		log.Infof("%#v", err)
 		return nil, err
 	}
 	if resp.Body == nil {
@@ -117,6 +142,7 @@ func GetQueueInfo(queueURL string) (*QueueInfo, error) {
 	defer resp.Body.Close()
 
 	data, err := ioutil.ReadAll(resp.Body)
+	log.Infof("Data:%s", string(data))
 	if err != nil {
 		return nil, err
 	}

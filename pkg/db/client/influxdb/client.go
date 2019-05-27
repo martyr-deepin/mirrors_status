@@ -2,27 +2,18 @@ package influxdb
 
 import (
 	"fmt"
+	"mirrors_status/internal/config"
 	"mirrors_status/internal/log"
-	"mirrors_status/pkg/model"
+	"mirrors_status/pkg/model/mirror"
 	"strconv"
 	"time"
 
 	"github.com/influxdata/influxdb/client/v2"
 )
 
-type Client struct {
-	Username string
-	Password string
-	Host     string
-	Port     int
-	DbName   string
-
-	c client.Client
-}
-
-func (c *Client) write(ps ...*client.Point) error {
+func write(ps ...*client.Point) error {
 	bp, err := client.NewBatchPoints(client.BatchPointsConfig{
-		Database: c.DbName,
+		Database: configs.NewServerConfig().InfluxDB.DBName,
 	})
 	if err != nil {
 		return err
@@ -30,44 +21,48 @@ func (c *Client) write(ps ...*client.Point) error {
 	for _, p := range ps {
 		bp.AddPoint(p)
 	}
-	return c.c.Write(bp)
+	return clt.Write(bp)
 }
 
-func (c *Client) close() error { return c.c.Close() }
+var clt client.Client
 
-func (c *Client) NewInfluxClient() (err error) {
+func InitInfluxClient() {
+	c := configs.NewServerConfig().InfluxDB
 	host := c.Host
 	port := c.Port
 	addr := "http://" + host + ":" + strconv.Itoa(port)
-	dbName := c.DbName
+	dbName := c.DBName
 	username := c.Username
 	password := c.Password
-	c.c, err = client.NewHTTPClient(client.HTTPConfig{
+	clt, err := client.NewHTTPClient(client.HTTPConfig{
 		Addr:     addr,
 		Username: username,
 		Password: password,
 	})
 	if err != nil {
-		return err
+		panic(err)
 	}
-	_, _, err = c.c.Ping(time.Second)
+	_, _, err = clt.Ping(time.Second)
 	if err != nil {
-		return err
+		panic(err)
 	}
-	_, err = c.c.Query(client.Query{
+	_, err = clt.Query(client.Query{
 		Command: fmt.Sprintf("create database %s", dbName),
 	})
-	defer c.c.Close()
 	return
 }
 
-func (c * Client) QueryDB(cmd string) (res []client.Result, err error) {
+func NewInfluxClient() (ct client.Client) {
+	return clt
+}
+
+func QueryDB(cmd string) (res []client.Result, err error) {
 	log.Infof("Query influxdb:%s", cmd)
 	q := client.Query{
 		Command: cmd,
-		Database: c.DbName,
+		Database: configs.NewServerConfig().InfluxDB.DBName,
 	}
-	if resp, e := c.c.Query(q); e == nil {
+	if resp, e := clt.Query(q); e == nil {
 		if resp.Error() != nil {
 			return res, resp.Error()
 		}
@@ -78,7 +73,7 @@ func (c * Client) QueryDB(cmd string) (res []client.Result, err error) {
 	return res, nil
 }
 
-func (c *Client) PushMirror(t time.Time, point model.MirrorsPoint) error {
+func PushMirror(t time.Time, point mirror.MirrorsPoint) error {
 	var cPoints []*client.Point
 	p, err := client.NewPoint(
 		"mirrors",
@@ -95,12 +90,12 @@ func (c *Client) PushMirror(t time.Time, point model.MirrorsPoint) error {
 	}
 	log.Infof("Pushing mirror:%v", err)
 	cPoints = append(cPoints, p)
-	return c.write(cPoints...)
+	return write(cPoints...)
 }
 
-func (c *Client) PushMirrors(t time.Time, points []model.MirrorsPoint) error {
+func PushMirrors(t time.Time, points []mirror.MirrorsPoint) error {
 	for _, p := range points {
-		err := c.PushMirror(time.Now(), p)
+		err := PushMirror(time.Now(), p)
 		if err != nil {
 			return err
 		}
@@ -108,7 +103,7 @@ func (c *Client) PushMirrors(t time.Time, points []model.MirrorsPoint) error {
 	return nil
 }
 
-func (c *Client) PushMirrorCdn(t time.Time, point model.MirrorsCdnPoint) error {
+func PushMirrorCdn(t time.Time, point mirror.MirrorsCdnPoint) error {
 	var cPoints []*client.Point
 	p, err := client.NewPoint(
 		"mirrors_cdn",
@@ -124,12 +119,12 @@ func (c *Client) PushMirrorCdn(t time.Time, point model.MirrorsCdnPoint) error {
 		return err
 	}
 	cPoints = append(cPoints, p)
-	return c.write(cPoints...)
+	return write(cPoints...)
 }
 
-func (c *Client) PushMirrorsCdn(t time.Time, points []model.MirrorsCdnPoint) error {
+func PushMirrorsCdn(t time.Time, points []mirror.MirrorsCdnPoint) error {
 	for _, p := range points {
-		err := c.PushMirrorCdn(time.Now(), p)
+		err := PushMirrorCdn(time.Now(), p)
 		if err != nil {
 			return err
 		}

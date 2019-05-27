@@ -1,9 +1,11 @@
-package model
+package mirror
 
 import (
 	"bytes"
 	"database/sql/driver"
 	"errors"
+	configs "mirrors_status/internal/config"
+	"mirrors_status/pkg/db/client/mysql"
 )
 
 type MirrorsPoint struct {
@@ -73,7 +75,7 @@ const (
 )
 
 type Mirror struct {
-	Index int	`gorm:"primary_key" json:"index"`
+	Mid int	`gorm:"primary_key" json:"index"`
 	Id    string	`gorm:"type:varchar(64)" json:"id"`
 
 	//Type     MirrorType
@@ -92,5 +94,43 @@ type Mirror struct {
 	Tags  string  `gorm:"type:varchar(64)" json:"tags"`
 	Extra JSON `sql:"type:json" json:"extra,omitempty"`
 	//ExtraBody ExtField `sql:"-"`
-	IsKey bool `gorm:"default:false" json:"is_key"`
+	IsKey bool `gorm:"default:0" json:"is_key"`
+}
+
+func (m Mirror) CreateMirror() error {
+	return mysql.NewMySQLClient().Table("mirrors").Create(&m).Error
+}
+
+func DeleteMirror(index int) error {
+	return mysql.NewMySQLClient().Table("mirrors").Delete(&Mirror{}, "`mid` = ?", index).Error
+}
+
+func (m Mirror) UpdateMirror() error {
+	return mysql.NewMySQLClient().Table("mirrors").Updates(&m, true).Error
+}
+
+func GetMirrorsByUpstream(upstream string) (mirrors []Mirror, err error) {
+	err = mysql.NewMySQLClient().Table("mirrors").Where("upstream = ?", upstream).Scan(&mirrors).Error
+	return
+}
+
+func GetMirrorsByIndices(mirrorIndices []int) (mirrors []Mirror, err error) {
+	err = mysql.NewMySQLClient().Table("mirrors").Where("`mid` in (?)", mirrorIndices).Scan(&mirrors).Error
+	return
+}
+
+func GetAllMirrors() (mirrors []Mirror, err error) {
+	err = mysql.NewMySQLClient().Table("mirrors").Order("weight").Find(&mirrors).Error
+	return
+}
+
+func GetMirrorUpstreams() (upstreamList configs.RepositoryInfoList) {
+	jenkinsConfig := configs.NewJenkinsConfig()
+	upstreamList = jenkinsConfig.Repositories
+	for _, upstream := range upstreamList {
+		for _, job := range upstream.Jobs {
+			job.Token = ""
+		}
+	}
+	return upstreamList
 }
