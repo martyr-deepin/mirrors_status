@@ -12,12 +12,14 @@ import (
 	"github.com/influxdata/influxdb/uuid"
 	"github.com/ivpusic/grpool"
 	"io"
-	"math/rand"
 	llog "log"
+	"math/rand"
 	configs "mirrors_status/internal/config"
 	"mirrors_status/internal/log"
-	"mirrors_status/pkg/db/service"
-	"mirrors_status/pkg/model"
+	"mirrors_status/pkg/db/client/influxdb"
+	"mirrors_status/pkg/model/constants"
+	"mirrors_status/pkg/model/mirror"
+	"mirrors_status/pkg/model/operation"
 	"net"
 	"net/http"
 	"net/url"
@@ -671,28 +673,28 @@ func TestMirrorFinish() {
 }
 
 func (checker *CDNChecker) PushAllMirrorsTestResults(testResults []*TestResult) error {
-	var mirrorsPoints []model.MirrorsPoint
-	var mirrorsCdnPoints []model.MirrorsCdnPoint
+	var mirrorsPoints []mirror.MirrorsPoint
+	var mirrorsCdnPoints []mirror.MirrorsCdnPoint
 
 	var mirrorsPointsAppendedMap = make(map[string]struct{})
 	for _, testResult := range testResults {
 		if testResult.CdnNodeAddress == "" {
 			if testResult.UrlPrefix != "" {
-				mirrorsPoints = append(mirrorsPoints, model.MirrorsPoint{
+				mirrorsPoints = append(mirrorsPoints, mirror.MirrorsPoint{
 					Name:     testResult.UrlPrefix,
 					Progress: testResult.Percent / 100.0,
 				})
 			}
 		} else {
 			if _, ok := mirrorsPointsAppendedMap[testResult.Name]; !ok {
-				mirrorsPoints = append(mirrorsPoints, model.MirrorsPoint{
+				mirrorsPoints = append(mirrorsPoints, mirror.MirrorsPoint{
 					Name:     testResult.UrlPrefix,
 					Progress: testResult.Percent / 100.0,
 				})
 				mirrorsPointsAppendedMap[testResult.Name] = struct{}{}
 			}
 
-			mirrorsCdnPoints = append(mirrorsCdnPoints, model.MirrorsCdnPoint{
+			mirrorsCdnPoints = append(mirrorsCdnPoints, mirror.MirrorsCdnPoint{
 				MirrorId:   testResult.Name,
 				NodeIpAddr: testResult.CdnNodeAddress,
 				Progress:   testResult.Percent / 100.0,
@@ -700,13 +702,13 @@ func (checker *CDNChecker) PushAllMirrorsTestResults(testResults []*TestResult) 
 		}
 	}
 	now := time.Now()
-	err := configs.GetInfluxdbClient().PushMirrors(now, mirrorsPoints)
+	err := influxdb.PushMirrors(now, mirrorsPoints)
 	if err != nil {
 		log.Errorf("Push to mirrors found error:%v", err)
 		return err
 	}
 
-	err = configs.GetInfluxdbClient().PushMirrorsCdn(now, mirrorsCdnPoints)
+	err = influxdb.PushMirrorsCdn(now, mirrorsCdnPoints)
 	if err != nil {
 		log.Errorf("Push to mirrors_cdn found error:%v", err)
 		return err
@@ -856,7 +858,10 @@ func (checker *CDNChecker) Init(username string, index string) error {
 			log.Warningf("Fetch CDN DNS found error:%v", err)
 			return err
 		}
-		service.UpdateMirrorStatus(index, model.STATUS_RUNNING, "")
+		err = operation.UpdateMirrorStatus(index, constants.STATUS_RUNNING, "")
+		if err != nil {
+			log.Error("Update mirror operation status found error:%#v", err)
+		}
 		checker.TestAllMirrors(mirrors, validateInfoList, username)
 	} else {
 		var mirror0 *Mirror
@@ -869,7 +874,10 @@ func (checker *CDNChecker) Init(username string, index string) error {
 		if mirror0 == nil {
 			return errors.New("No such mirror name: " + optMirror)
 		}
-		service.UpdateMirrorStatus(index, model.STATUS_RUNNING, "")
+		err = operation.UpdateMirrorStatus(index, constants.STATUS_RUNNING, "")
+		if err != nil {
+			log.Error("Update mirror operation status found error:%#v", err)
+		}
 		checker.TestMirror(mirror0.Id, mirror0.GetUrlPrefix(), mirror0.Weight, validateInfoList)
 	}
 	return nil
@@ -877,20 +885,29 @@ func (checker *CDNChecker) Init(username string, index string) error {
 
 func (checker *CDNChecker) CheckAllMirrors(username string) string {
 	index := uuid.TimeUUID().String()
-	service.CreateOperation(model.MirrorOperation{
+	err := operation.MirrorOperation{
 		Index:         index,
 		CreateDate:    time.Now(),
 		Username:      username,
-		OperationType: model.SYNC_ALL,
+		OperationType: constants.SYNC_ALL,
 		MirrorId:      "ALL",
-		Status:        model.STATUS_WAITING,
-	})
+		Status:        constants.STATUS_WAITING,
+	}.CreateMirrorOperation()
+	if err != nil {
+		log.Error("Create mirror operation found error:%#v", err)
+	}
 	go func() {
 		err := checker.Init(username, index)
 		if err != nil {
-			service.UpdateMirrorStatus(index, model.STATUS_FAILURE, err.Error())
+			err = operation.UpdateMirrorStatus(index, constants.STATUS_FAILURE, err.Error())
+			if err != nil {
+				log.Error("Update mirror operation status found error:%#v", err)
+			}
 		} else {
-			service.UpdateMirrorStatus(index, model.STATUS_FINISHED, "")
+			err = operation.UpdateMirrorStatus(index, constants.STATUS_FINISHED, "")
+			if err != nil {
+				log.Error("Update mirror operation status found error:%#v", err)
+			}
 		}
 	}()
 	return index
@@ -899,35 +916,52 @@ func (checker *CDNChecker) CheckAllMirrors(username string) string {
 func (checker *CDNChecker) CheckMirror(name, username string) string {
 	optMirror = name
 	index := uuid.TimeUUID().String()
-	service.CreateOperation(model.MirrorOperation{
+	err := operation.MirrorOperation{
 		Index:         index,
 		CreateDate:    time.Now(),
 		Username:      username,
-		OperationType: model.SYNC,
+		OperationType: constants.SYNC,
 		MirrorId:      name,
-		Status:        model.STATUS_WAITING,
-	})
+		Status:        constants.STATUS_WAITING,
+	}.CreateMirrorOperation()
+	if err != nil {
+		log.Error("Create mirror operation found error:%#v", err)
+	}
 	go func() {
 		err := checker.Init(username, index)
 		if err != nil {
-			service.UpdateMirrorStatus(index, model.STATUS_FAILURE, err.Error())
+			err = operation.UpdateMirrorStatus(index, constants.STATUS_FAILURE, err.Error())
+			if err != nil {
+				log.Error("Update mirror operation status found error:%#v", err)
+			}
 		} else {
-			service.UpdateMirrorStatus(index, model.STATUS_FINISHED, "")
+			err = operation.UpdateMirrorStatus(index, constants.STATUS_FINISHED, "")
+			if err != nil {
+				log.Error("Update mirror operation status found error:%#v", err)
+			}
 		}
 	}()
 	return index
 }
 
-func (checker *CDNChecker) CheckMirrors(mirrors []model.Mirror, username string) string {
+func (checker *CDNChecker) CheckMirrors(mirrors []mirror.Mirror, username string) string {
 	index := uuid.TimeUUID().String()
-	service.CreateOperation(model.MirrorOperation{
+	err := operation.MirrorOperation{
 		Index:         index,
 		CreateDate:    time.Now(),
 		Username:      username,
-		OperationType: model.SYNC_UPSTREAM,
-		Status:        model.STATUS_WAITING,
+		OperationType: constants.SYNC_UPSTREAM,
+		Status:        constants.STATUS_WAITING,
 		Total: len(mirrors),
-	})
+	}.CreateMirrorOperation()
+	if err != nil {
+		log.Error("Create mirror operation found error:%#v", err)
+	}
+	if len(mirrors) <= 0 {
+		_ = operation.UpdateMirrorStatus(index, constants.STATUS_FINISHED, "")
+		_ = operation.SyncMirrorFinishOnce(index)
+		return index
+	}
 	go func() {
 		for _, mirror := range mirrors {
 			optMirror = mirror.Id
@@ -936,16 +970,27 @@ func (checker *CDNChecker) CheckMirrors(mirrors []model.Mirror, username string)
 			if err != nil {
 				log.Infof("Sync mirror found error: %#v", err)
 				if mirror.IsKey {
-					service.UpdateMirrorTaskMsg(index, err.Error())
-					service.SyncMirrorFailedOnce(index)
+					if err != nil {
+						log.Error("Update mirror task msg found error:%#v", err)
+					}
+					err = operation.SyncMirrorFailedOnce(index)
+					if err != nil {
+						log.Error("Sync mirror fail found error:%#v", err)
+					}
 					continue
 				}
 			}
-			service.SyncMirrorFinishOnce(index)
+			err = operation.SyncMirrorFinishOnce(index)
+			if err != nil {
+				log.Error("Sync mirror finished found error:%#v", err)
+			}
 		}
-		operation, _ := service.GetOperationByIndex(index)
-		if (operation.Total <= operation.Failed + operation.Finish) && operation.Failed <= 0 {
-			service.UpdateMirrorStatus(index, model.STATUS_FINISHED, "")
+		op, _ := operation.GetOperationByIndex(index)
+		if (op.Total <= op.Failed + op.Finish) && op.Failed <= 0 {
+			err = operation.UpdateMirrorStatus(index, constants.STATUS_FINISHED, "")
+			if err != nil {
+				log.Error("Update mirror operation status found error:%#v", err)
+			}
 		}
 	}()
 	return index

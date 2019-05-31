@@ -5,9 +5,6 @@ import (
 	"gopkg.in/yaml.v3"
 	"io/ioutil"
 	"mirrors_status/internal/log"
-	"mirrors_status/pkg/db/client/influxdb"
-	"mirrors_status/pkg/db/client/mysql"
-	"mirrors_status/pkg/db/client/redis"
 )
 
 type InfluxDBConf struct {
@@ -22,6 +19,7 @@ type HttpConf struct {
 	Port int `yaml:"port"`
 	Host string `yaml:"host"`
 	AllowOrigin string `yaml:"allow-origin"`
+	AdminMail string `yaml:"admin-mail"`
 }
 
 type MySQLConf struct {
@@ -92,7 +90,6 @@ func ErrHandler(op string, err error) {
 
 func NewServerConfig() *ServerConf {
 	var serverConf ServerConf
-	log.Info("Loading server configs")
 	ymlFile, err := ioutil.ReadFile("configs/config.yml")
 	ErrHandler("opening file", err)
 
@@ -103,100 +100,11 @@ func NewServerConfig() *ServerConf {
 }
 
 var (
-	InfluxdbClient *influxdb.Client
-	MysqlClient *mysql.Client
-	RedisClient *redis.Client
 	MailDialer *gomail.Dialer
 )
 
-func GetInfluxdbClient() *influxdb.Client {
-	return InfluxdbClient
-}
-
-func GetMySQLClient() *mysql.Client {
-	return MysqlClient
-}
-
 func GetMailDialer() *gomail.Dialer {
 	return MailDialer
-}
-
-func GetRedisClient() *redis.Client {
-	return RedisClient
-}
-
-func InitInfluxdbClient(host string, port int, dbname, username, password string) error {
-	log.Infof("trying connecting influxdb:%s:%d %s %s %s", host, port, dbname, username, password)
-	InfluxdbClient = &influxdb.Client{
-		Host:     host,
-		Port:     port,
-		DbName:   dbname,
-		Username: username,
-		Password: password,
-	}
-	return InfluxdbClient.NewInfluxClient()
-}
-
-func InitMySQLClient(host string, port int, dbname, username, password string) error {
-	log.Infof("trying connecting MySQL:%s:%d %s %s %s", host, port, dbname, username, password)
-	MysqlClient = &mysql.Client{
-		Host:     host,
-		Port:     port,
-		DbName:   dbname,
-		Username: username,
-		Password: password,
-	}
-	return MysqlClient.NewMySQLClient()
-}
-
-func InitRedisClient(host string, port int, username, password string, db int) error {
-	log.Infof("trying connecting Redis:%s:%d", host, port)
-	RedisClient = &redis.Client{
-		Host: host,
-		Port: port,
-		Username: username,
-		Password: password,
-		DBName: db,
-	}
-	return RedisClient.NewRedisClient()
-}
-
-func InitDB(config ServerConf) {
-	host := config.InfluxDB.Host
-	port := config.InfluxDB.Port
-	dbName := config.InfluxDB.DBName
-	username := config.InfluxDB.Username
-	password := config.InfluxDB.Password
-
-	err := InitInfluxdbClient(host, port, dbName, username, password)
-	if err != nil {
-		log.Errorf("Connecting influxdb:%v found error:%v", config.InfluxDB, err)
-	}
-
-	host = config.MySQLDB.Host
-	port = config.MySQLDB.Port
-	dbName = config.MySQLDB.DBName
-	username = config.MySQLDB.Username
-	password = config.MySQLDB.Password
-
-	err = InitMySQLClient(host, port, dbName, username, password)
-	if err != nil {
-		log.Errorf("Connecting MySQL:%v found error:%v", config.MySQLDB, err)
-	}
-
-	host = config.Redis.Host
-	port = config.Redis.Port
-	username = config.Redis.Username
-	password = config.Redis.Password
-	db := config.Redis.DBName
-	err = InitRedisClient(host, port, username, password, db)
-	if err != nil {
-		log.Errorf("Connecting Redis:%v found error:%v", config.Redis, err)
-	}
-}
-
-func InitScheme() {
-	mysql.MigrateTables(MysqlClient)
 }
 
 func InitMailClient(conf *MailConf) {

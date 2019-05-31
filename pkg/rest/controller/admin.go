@@ -2,11 +2,12 @@ package controller
 
 import (
 	"github.com/gin-gonic/gin"
-	"mirrors_status/internal/config"
+	configs "mirrors_status/internal/config"
 	"mirrors_status/internal/log"
-	"mirrors_status/pkg/db/service"
 	"mirrors_status/pkg/mirror/checker"
-	"mirrors_status/pkg/model"
+	mirror2 "mirrors_status/pkg/model/mirror"
+	"mirrors_status/pkg/model/operation"
+	task2 "mirrors_status/pkg/model/task"
 	"mirrors_status/pkg/task/jenkins"
 	"mirrors_status/pkg/utils"
 	"net/http"
@@ -14,7 +15,7 @@ import (
 )
 
 func CreateMirror(c *gin.Context) {
-	var mirror model.Mirror
+	var mirror mirror2.Mirror
 	err := c.BindJSON(&mirror)
 	if err != nil {
 		log.Errorf("Parse json mirror:%v found error:%v", mirror, err)
@@ -22,7 +23,7 @@ func CreateMirror(c *gin.Context) {
 		return
 	}
 
-	err = service.NewMirrorService(*configs.GetMySQLClient()).CreateMirror(mirror)
+	err = mirror.CreateMirror()
 	if err != nil {
 		log.Errorf("Create mirror:%v found error:%v", mirror, err)
 		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.CREATE_MIRROR_FAILED))
@@ -40,7 +41,7 @@ func DeleteMirror(c *gin.Context) {
 		return
 	}
 
-	err = service.NewMirrorService(*configs.GetMySQLClient()).DeleteMirror(id)
+	err = mirror2.DeleteMirror(id)
 	if err != nil {
 		log.Errorf("Delete mirror:%d found error:%v", id, err)
 		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.DELETE_MIRROR_FAILED))
@@ -50,7 +51,7 @@ func DeleteMirror(c *gin.Context) {
 }
 
 func UpdateMirror(c *gin.Context) {
-	var mirror model.Mirror
+	var mirror mirror2.Mirror
 	err := c.BindJSON(&mirror)
 	if err != nil {
 		log.Errorf("Parse json mirror:%v found error:%v", mirror, err)
@@ -58,15 +59,7 @@ func UpdateMirror(c *gin.Context) {
 		return
 	}
 
-	pathId := c.Param("id")
-	id, err := strconv.Atoi(pathId)
-	if err != nil {
-		log.Errorf("Parse path param id:%d found error:%v", pathId, err)
-		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.PARAMETER_ERROR))
-		return
-	}
-
-	err = service.NewMirrorService(*configs.GetMySQLClient()).UpdateMirror(id, mirror)
+	err = mirror.UpdateMirror()
 	if err != nil {
 		log.Errorf("Update mirror:%v found error:%v", mirror, err)
 		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.UPDATE_MIRROR_FAILED))
@@ -76,7 +69,7 @@ func UpdateMirror(c *gin.Context) {
 }
 
 func CreateTask(c *gin.Context) {
-	var task model.Task
+	var task task2.Task
 	err := c.BindJSON(&task)
 	log.Infof("Creating task:%#v", task)
 	if err != nil {
@@ -84,15 +77,13 @@ func CreateTask(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.PARAMETER_ERROR))
 		return
 	}
-	mirrorService := service.NewMirrorService(*configs.GetMySQLClient())
-	taskService := service.NewTaskService(configs.GetMySQLClient())
-	mirrors, err := mirrorService.GetMirrorsByUpstream(task.Upstream)
+	mirrors, err := mirror2.GetMirrorsByUpstream(task.Upstream)
 	if err != nil {
 		log.Errorf("Get mirrors by upstream in [%#v] found error:%v", mirrors, err)
 		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.PARAMETER_ERROR))
 		return
 	}
-	id, err := taskService.CreateTask(task)
+	t, err := task.CreateTask()
 	if err != nil {
 		log.Errorf("Create task [%#v] found error:%v", task, err)
 		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.CREATE_TASK_FAILED))
@@ -100,27 +91,27 @@ func CreateTask(c *gin.Context) {
 	}
 	jobs := jenkins.GetMirrorJobsByUpstream(task.Upstream)
 	for _, job := range jobs {
-		ciTask := model.CITask{
-			TaskId: id,
+		err = task2.CITask{
+			TaskId: t.Id,
 			JobUrl: job.URL,
 			Name: job.Name,
 			Description: job.Description,
 			Token: job.Token,
-		}
-		err := taskService.CreateCiTask(ciTask)
+		}.CreateCiTask()
 		if err != nil {
-			log.Errorf("Create ci task [%#v] found error:%v", ciTask, err)
+			log.Errorf("Create ci task found error:%v", err)
 			c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.CREATE_CITASK_FAILED))
 			return
 		}
 	}
+	//go task.Handle()
 	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SuccessResp()))
 }
 
 type TaskDetailResp struct {
-	Task model.Task `json:"task"`
-	CITasks []model.CITask `json:"ci_tasks"`
-	MirrorOperation model.MirrorOperation `json:"mirror_operation,omitempty"`
+	Task            task2.Task                `json:"task"`
+	CITasks         []task2.CITask            `json:"ci_tasks"`
+	MirrorOperation operation.MirrorOperation `json:"mirror_operation,omitempty"`
 }
 
 func GetTaskById(c *gin.Context) {
@@ -132,18 +123,17 @@ func GetTaskById(c *gin.Context) {
 		return
 	}
 
-	taskService := service.NewTaskService(configs.GetMySQLClient())
-	task, err := taskService.GetTaskById(id)
+	task, err := task2.GetTaskById(id)
 	if err != nil {
 		log.Errorf("Get task by id:[%d] found error:%#v", id, err)
 		c.JSON(http.StatusNoContent, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
 		return
 	}
-	var mirrorOperation model.MirrorOperation
+	var mirrorOperation operation.MirrorOperation
 	if task.MirrorOperationIndex != "" {
-		mirrorOperation, err = service.GetOperationByIndex(task.MirrorOperationIndex)
+		mirrorOperation, err = operation.GetOperationByIndex(task.MirrorOperationIndex)
 	}
-	ciTasks, err := taskService.GetCiTasksById(id)
+	ciTasks, err := task2.GetCiTasksById(id)
 	if err != nil {
 		log.Errorf("Get ci tasks by id:[%d] found error:%#v", id, err)
 		c.JSON(http.StatusNoContent, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
@@ -162,20 +152,19 @@ func GetTaskById(c *gin.Context) {
 type OpenTasksResp []TaskDetailResp
 
 func GetIOpenTasks(c *gin.Context) {
-	taskService := service.NewTaskService(configs.GetMySQLClient())
 	var openTasks OpenTasksResp
-	tasks, err := taskService.GetOpenTasks()
+	tasks, err := task2.GetOpenTasks()
 	if err != nil {
 		log.Errorf("Get open tasks found error:%#v", err)
 		c.JSON(http.StatusNoContent, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
 		return
 	}
 	for _, task := range tasks {
-		var mirrorOperation model.MirrorOperation
+		var mirrorOperation operation.MirrorOperation
 		if task.MirrorOperationIndex != "" {
-			mirrorOperation, err = service.GetOperationByIndex(task.MirrorOperationIndex)
+			mirrorOperation, err = operation.GetOperationByIndex(task.MirrorOperationIndex)
 		}
-		ciTasks, err := taskService.GetCiTasksById(task.Id)
+		ciTasks, err := task2.GetCiTasksById(task.Id)
 		if err != nil {
 			log.Errorf("Get ci tasks by id:[%d] found error:%#v", task.Id, err)
 			c.JSON(http.StatusNoContent, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
@@ -212,7 +201,7 @@ func CheckMirrorsByUpstream(c *gin.Context) {
 		return
 	}
 	upstream := c.Param("upstream")
-	mirrors, err := service.NewMirrorService(*configs.GetMySQLClient()).GetMirrorsByUpstream(upstream)
+	mirrors, err := mirror2.GetMirrorsByUpstream(upstream)
 	if err != nil {
 		log.Errorf("Get mirrors by upstream:%s found error:%v", upstream, err)
 		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
@@ -240,8 +229,7 @@ func CheckMirrors(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.PARAMETER_ERROR))
 		return
 	}
-	mirrorService := service.NewMirrorService(*configs.GetMySQLClient())
-	mirrors, err := mirrorService.MultiGetByIndices(mirrorsReq.Mirrors)
+	mirrors, err := mirror2.GetMirrorsByIndices(mirrorsReq.Mirrors)
 	if err != nil {
 		log.Errorf("Get mirrors by indices:%#v found error:%v", mirrorsReq, err)
 		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
@@ -261,8 +249,7 @@ func AbortTask(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.PARAMETER_ERROR))
 		return
 	}
-	taskService := service.NewTaskService(configs.GetMySQLClient())
-	err = taskService.CloseTask(id)
+	err = task2.CloseTask(id)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.UPDATE_TASK_STATUS_FAILED))
 		return
