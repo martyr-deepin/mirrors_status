@@ -2,7 +2,6 @@ package controller
 
 import (
 	"github.com/gin-gonic/gin"
-	configs "mirrors_status/internal/config"
 	"mirrors_status/internal/log"
 	"mirrors_status/pkg/mirror/checker"
 	mirror2 "mirrors_status/pkg/model/mirror"
@@ -188,7 +187,7 @@ func CheckAllMirrors(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.PARSE_COOKIE_ERROR))
 		return
 	}
-	checker := checker.NewCDNChecker(configs.NewServerConfig().CdnChecker)
+	checker := checker.NewCDNChecker()
 	index := checker.CheckAllMirrors(username)
 	log.Infof("Check all mirror tasks established index:[%s]", index)
 	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SuccessResp()))
@@ -207,7 +206,7 @@ func CheckMirrorsByUpstream(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
 		return
 	}
-	checker := checker.NewCDNChecker(configs.NewServerConfig().CdnChecker)
+	checker := checker.NewCDNChecker()
 	index := checker.CheckMirrors(mirrors, username)
 	log.Infof("Check all mirror tasks established index:[%s]", index)
 	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SuccessResp()))
@@ -235,7 +234,7 @@ func CheckMirrors(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
 		return
 	}
-	checker := checker.NewCDNChecker(configs.NewServerConfig().CdnChecker)
+	checker := checker.NewCDNChecker()
 	index := checker.CheckMirrors(mirrors, username)
 	log.Infof("Multi check mirror by indices:%#v established index:%s", mirrorsReq.Mirrors, index)
 	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SuccessResp()))

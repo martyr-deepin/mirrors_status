@@ -22,11 +22,8 @@ func NewTaskManager() {
 	go taskManager.Execute()
 }
 
-func GetTaskManager() *TaskManager {
-	return taskManager
-}
-
 func (t *TaskManager) Init() {
+	log.Info("Init tasks of global task manager")
 	openTasks, err := task.GetOpenTasks()
 	if err != nil {
 		log.Errorf("Get open tasks found error:%#v", err)
@@ -35,6 +32,7 @@ func (t *TaskManager) Init() {
 	for _, task := range openTasks {
 		t.Locker.Lock()
 		t.Tasks[task.Upstream] = &task
+		log.Infof("Task:%#v", task)
 		t.Locker.Unlock()
 	}
 }
@@ -53,14 +51,13 @@ func (t *TaskManager) InsertTask(task task.Task) error {
 	return nil
 }
 
-func (t *TaskManager) DeleteTask(upstream string) error {
+func (t *TaskManager) DeleteTask(upstream string) {
 	if t.TaskExists(upstream) {
-		return errors.New("task already removed")
+		return
 	}
 	t.Locker.Lock()
 	delete(t.Tasks, upstream)
 	t.Locker.Unlock()
-	return nil
 }
 
 func (t *TaskManager) Execute() {
@@ -69,8 +66,19 @@ func (t *TaskManager) Execute() {
 		log.Infof("Queued tasks:%#v", t.Tasks)
 
 		t.Init()
-		for _, task := range t.Tasks {
-			task.Handle()
+		if len(t.Tasks) <= 0 {
+			log.Info("No task in queue")
+		} else {
+			for _, tk := range t.Tasks {
+				log.Infof("%#v", t)
+				tk.Handle(t.DeleteTask)
+				tsk, _ := task.GetTaskById(tk.Id)
+				log.Infof("%#v", tsk)
+				if !tsk.IsOpen {
+					t.DeleteTask(tk.Upstream)
+					break
+				}
+			}
 		}
 
 		time.Sleep(time.Second * 10)

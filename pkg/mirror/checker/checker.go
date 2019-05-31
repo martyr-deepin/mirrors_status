@@ -3,7 +3,6 @@ package checker
 import (
 	"bufio"
 	"bytes"
-	"crypto/md5"
 	"crypto/tls"
 	"errors"
 	"flag"
@@ -11,7 +10,6 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/influxdata/influxdb/uuid"
 	"github.com/ivpusic/grpool"
-	"io"
 	llog "log"
 	"math/rand"
 	configs "mirrors_status/internal/config"
@@ -27,8 +25,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -37,9 +33,9 @@ type CDNChecker struct {
 	CheckTool CheckTool
 }
 
-func NewCDNChecker(conf *configs.CdnCheckerConf) *CDNChecker {
+func NewCDNChecker() *CDNChecker {
 	return &CDNChecker{
-		CheckTool: NewCheckTool(conf),
+		CheckTool: NewCheckTool(),
 	}
 }
 
@@ -96,201 +92,7 @@ func ParseContentRange(str string) (posBegin, posEnd, total int, err error) {
 	return
 }
 
-func CheckFileReq0(filePath string, req *http.Request, client *http.Client) (*FileValidateInfo, error) {
-	size := 4 * 1024
-	// 第一次请求
-	req.Header.Set("Range", "bytes=0-" + strconv.Itoa(size-1))
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	defer resp.Body.Close()
-
-	code := resp.StatusCode / 100
-	if code != 2 {
-		return nil, fmt.Errorf("response status is %s", resp.Status)
-	}
-
-	modTime := resp.Header.Get("Last-Modified")
-	contentRange := resp.Header.Get("Content-Range")
-	posStart, postEnd, total, err := ParseContentRange(contentRange)
-	if err != nil {
-		return nil, err
-	}
-
-	if posStart != 0 {
-		return nil, errors.New("posStart != 0")
-	}
-
-	buf := make([]byte, size)
-	n, err := io.ReadFull(resp.Body, buf)
-	if err == io.ErrUnexpectedEOF {
-		if n != postEnd+1 {
-			return nil, err
-		}
-	} else if err != nil {
-		return nil, err
-	}
-
-	md5hash := md5.New()
-	_, err = md5hash.Write(buf[:n])
-	if err != nil {
-		return nil, err
-	}
-	vi := &FileValidateInfo{
-		FilePath: filePath,
-		Size:     total,
-		ModTime:  modTime,
-		URL:      req.URL.String(),
-	}
-
-	if total <= size {
-		vi.MD5Sum = md5hash.Sum(nil)
-		return vi, nil
-	}
-
-	secondPosBegin := total - size
-	if total < size*2 {
-		secondPosBegin = size
-	}
-
-	// 第二次请求
-	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", secondPosBegin, total-1))
-	resp, err = client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	defer resp.Body.Close()
-
-	contentRange = resp.Header.Get("Content-Range")
-	posStart2, postEnd2, total2, err2 := ParseContentRange(contentRange)
-	if err2 != nil {
-		return nil, err2
-	}
-	if posStart2 != secondPosBegin {
-		return nil, errors.New("2rd req posStart not match")
-	}
-	if postEnd2 != total-1 {
-		return nil, errors.New("2rd req posEnd not match")
-	}
-	if total != total2 {
-		return nil, errors.New("total not match")
-	}
-
-	buf2Size := total - 1 - secondPosBegin + 1
-	if n+buf2Size > total {
-		panic("assert failed: n + buf2size <= total")
-	}
-
-	buf2 := buf[:buf2Size]
-
-	_, err = io.ReadFull(resp.Body, buf2)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = md5hash.Write(buf2)
-	if err != nil {
-		return nil, err
-	}
-
-	vi.MD5Sum = md5hash.Sum(nil)
-	return vi, nil
-}
-
-func checkFileReq(filePath string, req *http.Request, allowRetry bool,
-	client *http.Client) (vi *FileValidateInfo, err error) {
-	retryDelay := func() {
-		ms := rand.Intn(3000) + 100
-		time.Sleep(time.Duration(ms) * time.Millisecond)
-	}
-	n := 1
-	if allowRetry {
-		n += maxNumOfRetries
-	}
-
-loop0:
-	for i := 0; i < n; i++ {
-		if i > 0 {
-			log.Infof("Retry %s for %d times", i, req.URL)
-		}
-
-		vi, err = CheckFileReq0(filePath, req, client)
-
-		if err != nil {
-			log.Errorf("Check file of:%s found error:%v", req.URL, err)
-			if !allowRetry {
-				return
-			}
-
-			allowRetryErrMessages := []string{
-				"connection reset by peer",
-				"Client.Timeout exceeded while reading body",
-				"network is unreachable",
-				"TLS handshake timeout",
-				"connection refused",
-				"connection timed out",
-				"Service Temporarily Unavailable",
-				"Internal Server Error",
-				"Bad Gateway",
-			}
-
-			errMsg := err.Error()
-			for _, msg := range allowRetryErrMessages {
-				if strings.Contains(errMsg, msg) {
-					retryDelay()
-					continue loop0
-				}
-			}
-
-			match := regDialTcpTimeout.FindStringSubmatch(errMsg)
-			if len(match) >= 2 {
-				host := match[1]
-				dialTcpTimeoutMapMu.Lock()
-				num := dialTcpTimeoutMap[host]
-				if num > 25 {
-					dialTcpTimeoutMapMu.Unlock()
-					return
-				}
-				dialTcpTimeoutMap[host]++
-				dialTcpTimeoutMapMu.Unlock()
-				retryDelay()
-				continue loop0
-			}
-			if regErrLookupTimeout.MatchString(errMsg) {
-				retryDelay()
-				continue loop0
-			}
-			return
-		}
-		if i > 0 {
-			log.Infof("Retry %s for %d times success", i, req.URL)
-		}
-		return
-	}
-	log.Infof("Retry failed for:%s", req.URL)
-	return
-}
-
-func CheckFile(urlPrefix string, filePath string, allowRetry bool,
-	client *http.Client) (*FileValidateInfo, error) {
-	if !strings.HasSuffix(urlPrefix, "/") {
-		urlPrefix += "/"
-	}
-
-	url0 := urlPrefix + filePath
-	log.Infof("Ckeck file for:%s", url0)
-	req, err := http.NewRequest(http.MethodGet, url0, nil)
-	if err != nil {
-		log.Errorf("Check file found error:%v", err)
-		return nil, err
-	}
-	return checkFileReq(filePath, req, allowRetry, client)
-}
-
-func (checker CDNChecker) GetValidateInfoList(files []string) ([]*FileValidateInfo, error) {
+func (checker CDNChecker) getValidateInfoList(files []string) ([]*FileValidateInfo, error) {
 	var validateInfoList []*FileValidateInfo
 	var mu sync.Mutex
 	client := GetHttpClient(9999)
@@ -317,7 +119,7 @@ func (checker CDNChecker) GetValidateInfoList(files []string) ([]*FileValidateIn
 	return validateInfoList, nil
 }
 
-func (checker *CDNChecker) PrefetchCdnDns(host string) error {
+func (checker *CDNChecker) prefetchCdnDns(host string) error {
 	ips, ok := dnsCache[host]
 	if ok {
 		return nil
@@ -333,7 +135,7 @@ func (checker *CDNChecker) PrefetchCdnDns(host string) error {
 	return nil
 }
 
-func (checker *CDNChecker) GetCdnDns(host string) []string {
+func (checker *CDNChecker) getCdnDns(host string) []string {
 	ips, ok := dnsCache[host]
 	if !ok {
 		if host == checker.CheckTool.Conf.DefaultCdn {
@@ -349,7 +151,7 @@ func (checker *CDNChecker) GetCdnDns(host string) []string {
 	return ips
 }
 
-func (checker *CDNChecker) CheckFileCdn(fileInfo FileInfo, cdnIp string, client *http.Client) (*FileValidateInfo, error) {
+func (checker *CDNChecker) checkFileCdn(fileInfo FileInfo, cdnIp string, client *http.Client) (*FileValidateInfo, error) {
 	url0 := "http://" + cdnIp + "/deepin/" + fileInfo.FilePath
 	log.Infof("Check file CDN for:%s", url0)
 	req, err := http.NewRequest(http.MethodGet, url0, nil)
@@ -481,7 +283,7 @@ func (tr *TestResult) Save() error {
 }
 
 
-func (checker *CDNChecker) TestCdnNode(mirrorId, urlPrefix, cdnNodeAddress string, validateInfoList []*FileValidateInfo) *TestResult {
+func (checker *CDNChecker) testCdnNode(mirrorId, urlPrefix, cdnNodeAddress string, validateInfoList []*FileValidateInfo) *TestResult {
 	pool := grpool.NewPool(6, 1)
 	defer pool.Release()
 	var mu sync.Mutex
@@ -495,7 +297,7 @@ func (checker *CDNChecker) TestCdnNode(mirrorId, urlPrefix, cdnNodeAddress strin
 	for _, validateInfo := range validateInfoList {
 		vi := validateInfo
 		pool.JobQueue <- func() {
-			validateInfo1, err := checker.CheckFileCdn(FileInfo{
+			validateInfo1, err := checker.checkFileCdn(FileInfo{
 				FilePath: vi.FilePath,
 			}, cdnNodeAddress, client)
 
@@ -541,7 +343,7 @@ func (checker *CDNChecker) TestCdnNode(mirrorId, urlPrefix, cdnNodeAddress strin
 	return r
 }
 
-func (checker *CDNChecker) TestMirrorCdn(mirrorId, urlPrefix string,
+func (checker *CDNChecker) testMirrorCdn(mirrorId, urlPrefix string,
 	validateInfoList []*FileValidateInfo) []*TestResult {
 	u, err := url.Parse(urlPrefix)
 	if err != nil {
@@ -549,7 +351,7 @@ func (checker *CDNChecker) TestMirrorCdn(mirrorId, urlPrefix string,
 		//panic(err)
 	}
 
-	ips := checker.GetCdnDns(u.Hostname())
+	ips := checker.getCdnDns(u.Hostname())
 	log.Infof("Testing mirror:%s, IPs:%v", mirrorId, ips)
 	if len(ips) == 0 {
 		return []*TestResult{
@@ -569,7 +371,7 @@ func (checker *CDNChecker) TestMirrorCdn(mirrorId, urlPrefix string,
 	for _, cdnAddress := range ips {
 		cdnAddressCopy := cdnAddress
 		pool.JobQueue <- func() {
-			testResult := checker.TestCdnNode(mirrorId, urlPrefix, cdnAddressCopy, validateInfoList)
+			testResult := checker.testCdnNode(mirrorId, urlPrefix, cdnAddressCopy, validateInfoList)
 			testResultsMu.Lock()
 			testResults = append(testResults, testResult)
 			testResultsMu.Unlock()
@@ -582,85 +384,12 @@ func (checker *CDNChecker) TestMirrorCdn(mirrorId, urlPrefix string,
 	return testResults
 }
 
-func GetMirrorsTestProgressDesc() string {
-	numMirrorsMu.Lock()
-	str := fmt.Sprintf("[%d/%d]", numMirrorsFinished, numMirrorsTotal)
-	numMirrorsMu.Unlock()
-	return str
-}
-
-func TestMirrorCommon(mirrorId, urlPrefix string, mirrorWeight int,
-	validateInfoList []*FileValidateInfo) *TestResult {
-	if urlPrefix == "" {
-		return &TestResult{
-			Name: mirrorId,
-		}
-	}
-
-	pool := grpool.NewPool(6, 1)
-	defer pool.Release()
-	var mu sync.Mutex
-	numTotal := len(validateInfoList)
-	records := make([]TestRecord, 0, numTotal)
-	var good int
-	var numErrs int
-	var numCompleted int
-
-	client := GetHttpClient(mirrorWeight)
-
-	pool.WaitCount(numTotal)
-
-	for _, validateInfo := range validateInfoList {
-		vi := validateInfo
-		pool.JobQueue <- func() {
-			validateInfo1, err := CheckFile(urlPrefix, vi.FilePath, mirrorWeight >= 0, client)
-			var record TestRecord
-			record.Standard = vi
-			mu.Lock()
-			numCompleted++
-			log.Infof("%s %s [%d/%d]", GetMirrorsTestProgressDesc(), mirrorId, numCompleted, numTotal)
-			if err != nil {
-				numErrs++
-				log.Warningf("Check file found error:%v", err)
-				record.Err = err
-			} else {
-				record.Result = validateInfo1
-				if vi.Equal(validateInfo1) {
-					good++
-					record.Equal = true
-				}
-			}
-			records = append(records, record)
-
-			mu.Unlock()
-			pool.JobDone()
-		}
-	}
-	pool.WaitAll()
-	percent := float64(good) / float64(len(validateInfoList)) * 100.0
-
-	r := &TestResult{
-		Name:      mirrorId,
-		UrlPrefix: urlPrefix,
-		Records:   records,
-		Percent:   percent,
-		NumErrs:   numErrs,
-	}
-
-	err := r.Save()
-	if err != nil {
-		log.Warningf("Save result found error:%v", err)
-	}
-
-	return r
-}
-
-func (checker *CDNChecker) TestMirror(mirrorId string, urlPrefix string, mirrorWeight int,
+func (checker *CDNChecker) testMirror(mirrorId string, urlPrefix string, mirrorWeight int,
 	validateInfoList []*FileValidateInfo) []*TestResult {
 	log.Infof("Testing mirror:%q, Prefix:%q, Weight:%d", mirrorId, urlPrefix, mirrorWeight)
 	if mirrorId == "default" {
 		// is cdn
-		return checker.TestMirrorCdn(mirrorId, urlPrefix, validateInfoList)
+		return checker.testMirrorCdn(mirrorId, urlPrefix, validateInfoList)
 	}
 	r := TestMirrorCommon(mirrorId, urlPrefix, mirrorWeight, validateInfoList)
 	return []*TestResult{r}
@@ -672,7 +401,7 @@ func TestMirrorFinish() {
 	numMirrorsMu.Unlock()
 }
 
-func (checker *CDNChecker) PushAllMirrorsTestResults(testResults []*TestResult) error {
+func (checker *CDNChecker) pushAllMirrorsTestResults(testResults []*TestResult) error {
 	var mirrorsPoints []mirror.MirrorsPoint
 	var mirrorsCdnPoints []mirror.MirrorsCdnPoint
 
@@ -716,7 +445,7 @@ func (checker *CDNChecker) PushAllMirrorsTestResults(testResults []*TestResult) 
 	return nil
 }
 
-func (checker *CDNChecker) TestAllMirrors(mirrors0 mirrors, validateInfoList []*FileValidateInfo, username string) {
+func (checker *CDNChecker) testAllMirrors(mirrors0 mirrors, validateInfoList []*FileValidateInfo, username string) {
 	if optNoTestHidden {
 		var tempMirrors mirrors
 		for _, mirror := range mirrors0 {
@@ -743,7 +472,7 @@ func (checker *CDNChecker) TestAllMirrors(mirrors0 mirrors, validateInfoList []*
 		mirrorCopy := mirror
 		pool.JobQueue <- func() {
 			t1 := time.Now()
-			testResult := checker.TestMirror(mirrorCopy.Id, mirrorCopy.GetUrlPrefix(),
+			testResult := checker.testMirror(mirrorCopy.Id, mirrorCopy.GetUrlPrefix(),
 				mirrorCopy.Weight, validateInfoList)
 			TestMirrorFinish()
 			duration0 := time.Since(t0)
@@ -758,10 +487,10 @@ func (checker *CDNChecker) TestAllMirrors(mirrors0 mirrors, validateInfoList []*
 	}
 	pool.WaitAll()
 
-	checker.PushAllMirrorsTestResults(testResults)
+	checker.pushAllMirrorsTestResults(testResults)
 }
 
-func (checker *CDNChecker) Init(username string, index string) error {
+func (checker *CDNChecker) init(username string, index string) error {
 	checker.CheckTool = CheckTool{
 		Conf: configs.NewServerConfig().CdnChecker,
 	}
@@ -831,38 +560,43 @@ func (checker *CDNChecker) Init(username string, index string) error {
 	mirrors, err := GetUnpublishedMirrors(configs.NewServerConfig().CdnChecker.Target)
 	if err != nil {
 		log.Errorf("Get unpublished mirrors found error:%v", err)
+		_ = operation.UpdateMirrorStatus(index, constants.STATUS_FAILURE, err.Error())
 		return err
 	}
 
 	changeFiles, err := GetChangeFiles(*checker.CheckTool.Conf)
 	if err != nil {
 		log.Errorf("Get change files found error:%v", err)
+		_ = operation.UpdateMirrorStatus(index, constants.STATUS_FAILURE, err.Error())
 		return err
 	}
 
 	if len(changeFiles) == 0 {
+		_ = operation.UpdateMirrorStatus(index, constants.STATUS_FINISHED, "")
 		return nil
 	}
 
 	sort.Strings(changeFiles)
 
-	validateInfoList, err := checker.GetValidateInfoList(changeFiles)
+	validateInfoList, err := checker.getValidateInfoList(changeFiles)
 	if err != nil {
 		log.Errorf("Get validate info list found error:%v", err)
+		_ = operation.UpdateMirrorStatus(index, constants.STATUS_FAILURE, err.Error())
 		return err
 	}
 
 	if optMirror == "" {
-		err = checker.PrefetchCdnDns(configs.NewServerConfig().CdnChecker.DefaultCdn)
+		err = checker.prefetchCdnDns(configs.NewServerConfig().CdnChecker.DefaultCdn)
 		if err != nil {
 			log.Warningf("Fetch CDN DNS found error:%v", err)
+			_ = operation.UpdateMirrorStatus(index, constants.STATUS_FAILURE, err.Error())
 			return err
 		}
 		err = operation.UpdateMirrorStatus(index, constants.STATUS_RUNNING, "")
 		if err != nil {
 			log.Error("Update mirror operation status found error:%#v", err)
 		}
-		checker.TestAllMirrors(mirrors, validateInfoList, username)
+		checker.testAllMirrors(mirrors, validateInfoList, username)
 	} else {
 		var mirror0 *Mirror
 		for _, mirror := range mirrors {
@@ -872,13 +606,14 @@ func (checker *CDNChecker) Init(username string, index string) error {
 			}
 		}
 		if mirror0 == nil {
+			_ = operation.UpdateMirrorStatus(index, constants.STATUS_FAILURE, "No such mirror " + optMirror)
 			return errors.New("No such mirror name: " + optMirror)
 		}
 		err = operation.UpdateMirrorStatus(index, constants.STATUS_RUNNING, "")
 		if err != nil {
 			log.Error("Update mirror operation status found error:%#v", err)
 		}
-		checker.TestMirror(mirror0.Id, mirror0.GetUrlPrefix(), mirror0.Weight, validateInfoList)
+		checker.testMirror(mirror0.Id, mirror0.GetUrlPrefix(), mirror0.Weight, validateInfoList)
 	}
 	return nil
 }
@@ -897,7 +632,7 @@ func (checker *CDNChecker) CheckAllMirrors(username string) string {
 		log.Error("Create mirror operation found error:%#v", err)
 	}
 	go func() {
-		err := checker.Init(username, index)
+		err := checker.init(username, index)
 		if err != nil {
 			err = operation.UpdateMirrorStatus(index, constants.STATUS_FAILURE, err.Error())
 			if err != nil {
@@ -928,7 +663,7 @@ func (checker *CDNChecker) CheckMirror(name, username string) string {
 		log.Error("Create mirror operation found error:%#v", err)
 	}
 	go func() {
-		err := checker.Init(username, index)
+		err := checker.init(username, index)
 		if err != nil {
 			err = operation.UpdateMirrorStatus(index, constants.STATUS_FAILURE, err.Error())
 			if err != nil {
@@ -966,7 +701,7 @@ func (checker *CDNChecker) CheckMirrors(mirrors []mirror.Mirror, username string
 		for _, mirror := range mirrors {
 			optMirror = mirror.Id
 			log.Infof("Before init mirror check by upstream")
-			err := checker.Init(username, index)
+			err := checker.init(username, index)
 			if err != nil {
 				log.Infof("Sync mirror found error: %#v", err)
 				if mirror.IsKey {
