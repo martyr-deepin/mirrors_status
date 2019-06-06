@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"mirrors_status/internal/log"
 	"mirrors_status/pkg/mirror/checker"
+	"mirrors_status/pkg/model/archive"
 	mirror2 "mirrors_status/pkg/model/mirror"
 	"mirrors_status/pkg/model/operation"
 	task2 "mirrors_status/pkg/model/task"
@@ -103,7 +104,10 @@ func CreateTask(c *gin.Context) {
 			return
 		}
 	}
-	//go task.Handle()
+	go t.Handle(func(upstream string) {
+		log.Infof("Start executing task:[%s]", upstream)
+	})
+	_ = archive.ArchiveTask(t.Id)
 	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SuccessResp()))
 }
 
@@ -254,4 +258,31 @@ func AbortTask(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SuccessResp()))
+}
+
+func GetArchiveByTaskId(c *gin.Context) {
+	pathId := c.Param("id")
+	id, err := strconv.Atoi(pathId)
+	if err != nil {
+		log.Errorf("Parse path param id:%d found error:%v", pathId, err)
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.PARAMETER_ERROR))
+		return
+	}
+	archive, err := archive.GetArchiveByTaskId(id)
+	if err != nil {
+		log.Errorf("Get archive by id:[%d] found error:%#v", id, err)
+		c.JSON(http.StatusNoContent, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
+		return
+	}
+	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SetData("archive", archive)))
+}
+
+func GetAllArchives(c *gin.Context) {
+	archives, err := archive.GetAllArchives()
+	if err != nil {
+		log.Errorf("Get archives found error:%#v", err)
+		c.JSON(http.StatusNoContent, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
+		return
+	}
+	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SetData("archives", archives)))
 }

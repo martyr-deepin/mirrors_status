@@ -20,7 +20,6 @@ func InitMySQLClient() {
 		panic(err)
 	}
 	client = clt.New()
-	return
 }
 
 func NewMySQLClient() (db *gorm.DB) {

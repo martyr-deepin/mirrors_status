@@ -8,6 +8,7 @@ import (
 	"mirrors_status/pkg/db/client/influxdb"
 	"mirrors_status/pkg/db/client/mysql"
 	"mirrors_status/pkg/db/client/redis"
+	"mirrors_status/pkg/model/archive"
 	"mirrors_status/pkg/model/mirror"
 	"mirrors_status/pkg/model/operation"
 	"mirrors_status/pkg/model/task"
@@ -24,7 +25,7 @@ func Init() {
 	redis.InitRedisClient()
 	influxdb.InitInfluxClient()
 
-	err := mysql.NewMySQLClient().Debug().AutoMigrate(operation.MirrorOperation{}, mirror.Mirror{}, task.Task{}, task.CITask{}).Error
+	err := mysql.NewMySQLClient().Debug().AutoMigrate(operation.MirrorOperation{}, mirror.Mirror{}, task.Task{}, task.CITask{}, archive.Archive{}).Error
 	if err != nil {
 		panic(err)
 	}

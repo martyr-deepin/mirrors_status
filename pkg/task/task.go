@@ -5,7 +5,6 @@ import (
 	"mirrors_status/internal/log"
 	"mirrors_status/pkg/model/task"
 	"sync"
-	"time"
 )
 
 type TaskManager struct {
@@ -29,6 +28,7 @@ func (t *TaskManager) Init() {
 		log.Errorf("Get open tasks found error:%#v", err)
 		return
 	}
+	t.Tasks = make(map[string]*task.Task)
 	for _, task := range openTasks {
 		t.Locker.Lock()
 		t.Tasks[task.Upstream] = &task
@@ -47,6 +47,7 @@ func (t *TaskManager) InsertTask(task task.Task) error {
 	}
 	t.Locker.Lock()
 	t.Tasks[task.Upstream] = &task
+	task.Handle(t.DeleteTask)
 	t.Locker.Unlock()
 	return nil
 }
@@ -61,26 +62,22 @@ func (t *TaskManager) DeleteTask(upstream string) {
 }
 
 func (t *TaskManager) Execute() {
-	for {
-		log.Info("TASK LOOP")
-		log.Infof("Queued tasks:%#v", t.Tasks)
+	log.Info("TASK LOOP")
+	log.Infof("Queued tasks:%#v", t.Tasks)
 
-		t.Init()
-		if len(t.Tasks) <= 0 {
-			log.Info("No task in queue")
-		} else {
-			for _, tk := range t.Tasks {
-				log.Infof("%#v", t)
-				tk.Handle(t.DeleteTask)
-				tsk, _ := task.GetTaskById(tk.Id)
-				log.Infof("%#v", tsk)
-				if !tsk.IsOpen {
-					t.DeleteTask(tk.Upstream)
-					break
-				}
+	t.Init()
+	if len(t.Tasks) <= 0 {
+		log.Info("No task in queue")
+	} else {
+		for _, tk := range t.Tasks {
+			log.Infof("%#v", t)
+			tk.Handle(t.DeleteTask)
+			tsk, _ := task.GetTaskById(tk.Id)
+			log.Infof("%#v", tsk)
+			if !tsk.IsOpen {
+				t.DeleteTask(tk.Upstream)
+				break
 			}
 		}
-
-		time.Sleep(time.Second * 10)
 	}
 }

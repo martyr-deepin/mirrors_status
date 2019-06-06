@@ -26,5 +26,7 @@ func InitAdminController(engine *gin.Engine) {
 	r.GET("/check/:upstream", controller.CheckMirrorsByUpstream)
 	r.POST("/check", controller.CheckMirrors)
 	r.DELETE("/tasks/:id", controller.AbortTask)
+	r.GET("/archives/:id", controller.GetArchiveByTaskId)
+	r.GET("/archives", controller.GetAllArchives)
 }
 

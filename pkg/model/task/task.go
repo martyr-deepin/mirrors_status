@@ -16,19 +16,19 @@ import (
 )
 
 type Task struct {
-	Id                   int                   `gorm:"primary_key" json:"id"`
-	Creator              string                `gorm:"type:varchar(32)" json:"creator"`
-	CreateAt             time.Time             `gorm:"default:now()" json:"create_at"`
-	Upstream             string                `gorm:"type:varchar(64)" json:"upstream"`
-	IsOpen               bool                  `gorm:"default:true" json:"is_open"`
-	ContactMail          string                `gorm:"type:varchar(64)" json:"contact_mail"`
-	MirrorOperationIndex string                `gorm:"type:varchar(64)" json:"mirror_operation_index"`
-	MirrorSyncFinished   bool                  `gorm:"default:false" json:"mirror_sync_finished"`
+	Id                   int                             `gorm:"primary_key" json:"id"`
+	Creator              string                          `gorm:"type:varchar(32)" json:"creator"`
+	CreateAt             time.Time                       `gorm:"default:now()" json:"create_at"`
+	Upstream             string                          `gorm:"type:varchar(64)" json:"upstream"`
+	IsOpen               bool                            `gorm:"default:true" json:"is_open"`
+	ContactMail          string                          `gorm:"type:varchar(64)" json:"contact_mail"`
+	MirrorOperationIndex string                          `gorm:"type:varchar(64)" json:"mirror_operation_index"`
+	MirrorSyncFinished   bool                            `gorm:"default:false" json:"mirror_sync_finished"`
 	Status               constants.MirrorOperationStatus `gorm:"default:0" json:"status"`
 
-	MirrorOperationStart  time.Time `gorm:"default:null" json:"mirror_operation_start"`
-	MirrorOperationStatus constants.MirrorOperationStatus       `gorm:"type:tinyint(1)" json:"mirror_operation_status"`
-	Progress              int       `gorm:"default:0" json:"progress"`
+	MirrorOperationStart  time.Time                       `gorm:"default:null" json:"mirror_operation_start"`
+	MirrorOperationStatus constants.MirrorOperationStatus `gorm:"type:tinyint(1)" json:"mirror_operation_status"`
+	Progress              int                             `gorm:"default:0" json:"progress"`
 }
 
 type CITask struct {
@@ -132,21 +132,31 @@ func (t Task) Handle(delTask func(string)) {
 		mailAdmin(err)
 		return
 	}
-	log.Infof("Length of tasks:%d", 2 * len(ciTasks))
-	if t.Progress >= 2 * len(ciTasks) {
+	log.Infof("Length of tasks:%d", 2*len(ciTasks))
+	for _, ciTask := range ciTasks {
+		ciTask.Handle(t.Id, t.Upstream, t.ContactMail, t.Creator)
+	}
+	t, err = GetTaskById(t.Id)
+	if err != nil {
+		log.Error("Get task by task id:[%d] found error:%#v", t.Id, err)
+		mailAdmin(err)
+		return
+	}
+	if t.Progress >= 2*len(ciTasks) {
 		_ = CloseTask(t.Id)
 		delTask(t.Upstream)
 		_ = UpdateTaskStatus(t.Id, constants.STATUS_FINISHED)
 		return
 	}
-	for _, ciTask := range ciTasks {
-		ciTask.Handle(t.Id, t.Upstream, t.ContactMail, t.Creator)
-	}
 }
 
 func (c CITask) Handle(id int, upstream, contact, creator string) {
 	log.Infof("Starting executing CI task:[%s]", c.Description)
-	if c.Result != "" {
+	if c.Result == "SUCCESS" {
+		HandleMirrorOperation(id, upstream, contact, creator)
+		return
+	}
+	if c.Result == "FAILURE" {
 		return
 	}
 	jobInfo := &configs.JobInfo{

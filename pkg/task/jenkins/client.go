@@ -80,7 +80,6 @@ func TriggerBuild(job *configs.JobInfo, params map[string]string, abort <-chan b
 		}
 
 	}
-	//return buildID, nil
 }
 
 func LastBuildInfo(job *configs.JobInfo) (*BuildInfo, error) {

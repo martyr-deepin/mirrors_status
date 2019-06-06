@@ -14,7 +14,6 @@ import (
 	"math/rand"
 	configs "mirrors_status/internal/config"
 	"mirrors_status/internal/log"
-	"mirrors_status/pkg/db/client/influxdb"
 	"mirrors_status/pkg/model/constants"
 	"mirrors_status/pkg/model/mirror"
 	"mirrors_status/pkg/model/operation"
@@ -430,14 +429,13 @@ func (checker *CDNChecker) pushAllMirrorsTestResults(testResults []*TestResult) 
 			})
 		}
 	}
-	now := time.Now()
-	err := influxdb.PushMirrors(now, mirrorsPoints)
+	err := mirror.PushMirrors(mirrorsPoints)
 	if err != nil {
 		log.Errorf("Push to mirrors found error:%v", err)
 		return err
 	}
 
-	err = influxdb.PushMirrorsCdn(now, mirrorsCdnPoints)
+	err = mirror.PushMirrorsCdn(mirrorsCdnPoints)
 	if err != nil {
 		log.Errorf("Push to mirrors_cdn found error:%v", err)
 		return err
