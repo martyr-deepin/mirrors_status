@@ -2,9 +2,10 @@ package controller
 
 import (
 	"github.com/gin-gonic/gin"
-	configs "mirrors_status/internal/config"
 	"mirrors_status/internal/log"
 	"mirrors_status/pkg/mirror/checker"
+	"mirrors_status/pkg/model/archive"
+	"mirrors_status/pkg/model/constants"
 	mirror2 "mirrors_status/pkg/model/mirror"
 	"mirrors_status/pkg/model/operation"
 	task2 "mirrors_status/pkg/model/task"
@@ -104,7 +105,10 @@ func CreateTask(c *gin.Context) {
 			return
 		}
 	}
-	//go task.Handle()
+	go t.Handle(func(upstream string) {
+		log.Infof("Start executing task:[%s]", upstream)
+	})
+	_ = archive.ArchiveTask(t.Id)
 	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SuccessResp()))
 }
 
@@ -188,7 +192,7 @@ func CheckAllMirrors(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.PARSE_COOKIE_ERROR))
 		return
 	}
-	checker := checker.NewCDNChecker(configs.NewServerConfig().CdnChecker)
+	checker := checker.NewCDNChecker()
 	index := checker.CheckAllMirrors(username)
 	log.Infof("Check all mirror tasks established index:[%s]", index)
 	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SuccessResp()))
@@ -207,7 +211,7 @@ func CheckMirrorsByUpstream(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
 		return
 	}
-	checker := checker.NewCDNChecker(configs.NewServerConfig().CdnChecker)
+	checker := checker.NewCDNChecker()
 	index := checker.CheckMirrors(mirrors, username)
 	log.Infof("Check all mirror tasks established index:[%s]", index)
 	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SuccessResp()))
@@ -235,7 +239,7 @@ func CheckMirrors(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
 		return
 	}
-	checker := checker.NewCDNChecker(configs.NewServerConfig().CdnChecker)
+	checker := checker.NewCDNChecker()
 	index := checker.CheckMirrors(mirrors, username)
 	log.Infof("Multi check mirror by indices:%#v established index:%s", mirrorsReq.Mirrors, index)
 	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SuccessResp()))
@@ -255,4 +259,61 @@ func AbortTask(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SuccessResp()))
+}
+
+func UpdateTaskStatus(c *gin.Context) {
+	pathId := c.Param("id")
+	id, err := strconv.Atoi(pathId)
+	if err != nil {
+		log.Errorf("Parse path param id:%d found error:%v", pathId, err)
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.PARAMETER_ERROR))
+		return
+	}
+	pathStatus := c.Param("status")
+	status, err := strconv.Atoi(pathStatus)
+	if err != nil {
+		log.Errorf("Parse path param id:%d found error:%v", pathId, err)
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.PARAMETER_ERROR))
+		return
+	}
+	err = task2.UpdateTaskStatus(id, constants.MirrorOperationStatus(status))
+	if err != nil {
+		log.Errorf("Update task status by task id:%d found error:%v", pathId, err)
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.UPDATE_TASK_STATUS_FAILED))
+		return
+	}
+	err = task2.CloseTask(id)
+	if err != nil {
+		log.Errorf("Update task status by task id:%d found error:%v", pathId, err)
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.UPDATE_TASK_STATUS_FAILED))
+		return
+	}
+	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SuccessResp()))
+}
+
+func GetArchiveByTaskId(c *gin.Context) {
+	pathId := c.Param("id")
+	id, err := strconv.Atoi(pathId)
+	if err != nil {
+		log.Errorf("Parse path param id:%d found error:%v", pathId, err)
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.PARAMETER_ERROR))
+		return
+	}
+	archive, err := archive.GetArchiveByTaskId(id)
+	if err != nil {
+		log.Errorf("Get archive by id:[%d] found error:%#v", id, err)
+		c.JSON(http.StatusNoContent, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
+		return
+	}
+	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SetData("archive", archive)))
+}
+
+func GetAllArchives(c *gin.Context) {
+	archives, err := archive.GetAllArchives()
+	if err != nil {
+		log.Errorf("Get archives found error:%#v", err)
+		c.JSON(http.StatusNoContent, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
+		return
+	}
+	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SetData("archives", archives)))
 }

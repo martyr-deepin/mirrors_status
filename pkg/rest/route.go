@@ -10,7 +10,7 @@ func InitGuestController(engine *gin.Engine) {
 
 	r.GET("/mirrors", controller.GetAllMirrors)
 	r.GET("/mirrors/:upstream", controller.GetMirrorsByUpstream)
-	r.GET("/upstream", controller.GetAllUpstreams)
+	r.GET("/upstreams", controller.GetAllUpstreams)
 }
 
 func InitAdminController(engine *gin.Engine) {
@@ -18,7 +18,7 @@ func InitAdminController(engine *gin.Engine) {
 
 	r.POST("/mirrors", controller.CreateMirror)
 	r.DELETE("/mirrors/:id", controller.DeleteMirror)
-	r.PUT("/mirrors/:id", controller.UpdateMirror)
+	r.PUT("/mirrors", controller.UpdateMirror)
 	r.POST("/tasks", controller.CreateTask)
 	r.GET("/tasks/:id", controller.GetTaskById)
 	r.GET("/tasks", controller.GetIOpenTasks)
@@ -26,5 +26,8 @@ func InitAdminController(engine *gin.Engine) {
 	r.GET("/check/:upstream", controller.CheckMirrorsByUpstream)
 	r.POST("/check", controller.CheckMirrors)
 	r.DELETE("/tasks/:id", controller.AbortTask)
+	r.PATCH("/tasks/:id/:status", controller.UpdateTaskStatus)
+	r.GET("/archives/:id", controller.GetArchiveByTaskId)
+	r.GET("/archives", controller.GetAllArchives)
 }
 

@@ -16,9 +16,9 @@ type CheckTool struct {
 	Conf *configs.CdnCheckerConf
 }
 
-func NewCheckTool(conf *configs.CdnCheckerConf) CheckTool {
+func NewCheckTool() CheckTool {
 	return CheckTool{
-		Conf: conf,
+		Conf: configs.NewServerConfig().CdnChecker,
 	}
 }
 

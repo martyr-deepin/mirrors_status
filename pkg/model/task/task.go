@@ -1,6 +1,7 @@
 package task
 
 import (
+	"errors"
 	"github.com/jinzhu/gorm"
 	configs "mirrors_status/internal/config"
 	"mirrors_status/internal/log"
@@ -15,19 +16,19 @@ import (
 )
 
 type Task struct {
-	Id                   int                   `gorm:"primary_key" json:"id"`
-	Creator              string                `gorm:"type:varchar(32)" json:"creator"`
-	CreateAt             time.Time             `gorm:"default:now()" json:"create_at"`
-	Upstream             string                `gorm:"type:varchar(64)" json:"upstream"`
-	IsOpen               bool                  `gorm:"default:true" json:"is_open"`
-	ContactMail          string                `gorm:"type:varchar(64)" json:"contact_mail"`
-	MirrorOperationIndex string                `gorm:"type:varchar(64)" json:"mirror_operation_index"`
-	MirrorSyncFinished   bool                  `gorm:"default:false" json:"mirror_sync_finished"`
+	Id                   int                             `gorm:"primary_key" json:"id"`
+	Creator              string                          `gorm:"type:varchar(32)" json:"creator"`
+	CreateAt             time.Time                       `gorm:"default:now()" json:"create_at"`
+	Upstream             string                          `gorm:"type:varchar(64)" json:"upstream"`
+	IsOpen               bool                            `gorm:"default:true" json:"is_open"`
+	ContactMail          string                          `gorm:"type:varchar(64)" json:"contact_mail"`
+	MirrorOperationIndex string                          `gorm:"type:varchar(64)" json:"mirror_operation_index"`
+	MirrorSyncFinished   bool                            `gorm:"default:false" json:"mirror_sync_finished"`
 	Status               constants.MirrorOperationStatus `gorm:"default:0" json:"status"`
 
-	MirrorOperationStart  time.Time `gorm:"default:null" json:"mirror_operation_start"`
-	MirrorOperationStatus int       `gorm:"type:tinyint(1)" json:"mirror_operation_status"`
-	Progress              int       `gorm:"default:0" json:"progress"`
+	MirrorOperationStart  time.Time                       `gorm:"default:null" json:"mirror_operation_start"`
+	MirrorOperationStatus constants.MirrorOperationStatus `gorm:"type:tinyint(1)" json:"mirror_operation_status"`
+	Progress              int                             `gorm:"default:0" json:"progress"`
 }
 
 type CITask struct {
@@ -44,7 +45,16 @@ type CITask struct {
 }
 
 func (t Task) CreateTask() (Task, error) {
-	err := mysql.NewMySQLClient().Table("tasks").Create(&t).Error
+	openTasks, err := GetOpenTasks()
+	if err != nil {
+		return Task{}, err
+	}
+	for _, openTask := range openTasks {
+		if openTask.Upstream == t.Upstream {
+			return Task{}, errors.New("task already exists")
+		}
+	}
+	err = mysql.NewMySQLClient().Table("tasks").Create(&t).Error
 	log.Infof("%#v", t)
 	return t, err
 }
@@ -78,6 +88,11 @@ func GetTaskById(id int) (task Task, err error) {
 	return
 }
 
+func GetCiTaskById(id int) (task CITask, err error) {
+	err = mysql.NewMySQLClient().Table("ci_tasks").Where("id = ?", id).Scan(&task).Error
+	return
+}
+
 func GetCiTasksById(id int) (tasks []CITask, err error) {
 	err = mysql.NewMySQLClient().Table("ci_tasks").Where("task_id = ?", id).Scan(&tasks).Error
 	return
@@ -104,25 +119,44 @@ func UpdateTaskStatus(id int, status constants.MirrorOperationStatus) error {
 	return mysql.NewMySQLClient().Table("tasks").Where("id = ?", id).Update("status", status).Error
 }
 
-func (t Task) Handle() {
-	log.Infof("Starting executing task:[%d]", t.Id)
+func (t Task) Handle(delTask func(string)) {
+	log.Infof("Starting executing task:[%#v]", t)
 	if t.Status == constants.STATUS_FAILURE || t.Status == constants.STATUS_FINISHED {
+		delTask(t.Upstream)
 		return
 	}
+	_ = UpdateTaskStatus(t.Id, constants.STATUS_RUNNING)
 	ciTasks, err := GetCiTasksById(t.Id)
 	if err != nil {
 		log.Error("Get CI tasks by task id:[%d] found error:%#v", t.Id, err)
 		mailAdmin(err)
 		return
 	}
+	log.Infof("Length of tasks:%d", 2*len(ciTasks))
 	for _, ciTask := range ciTasks {
 		ciTask.Handle(t.Id, t.Upstream, t.ContactMail, t.Creator)
+	}
+	t, err = GetTaskById(t.Id)
+	if err != nil {
+		log.Error("Get task by task id:[%d] found error:%#v", t.Id, err)
+		mailAdmin(err)
+		return
+	}
+	if t.Progress >= 2*len(ciTasks) {
+		_ = CloseTask(t.Id)
+		delTask(t.Upstream)
+		_ = UpdateTaskStatus(t.Id, constants.STATUS_FINISHED)
+		return
 	}
 }
 
 func (c CITask) Handle(id int, upstream, contact, creator string) {
 	log.Infof("Starting executing CI task:[%s]", c.Description)
-	if c.Result != "" {
+	if c.Result == "SUCCESS" {
+		HandleMirrorOperation(id, upstream, contact, creator)
+		return
+	}
+	if c.Result == "FAILURE" {
 		return
 	}
 	jobInfo := &configs.JobInfo{
@@ -137,15 +171,19 @@ func (c CITask) Handle(id int, upstream, contact, creator string) {
 	queueId, err := jenkins.TriggerBuild(jobInfo, params, abort)
 	if err != nil {
 		_ = utils.SendMail("warning", "<h3>Jenkins task trigger failed. Error messages are as follow:</h3><br><p>"+err.Error()+"</p><hr><p>Sent from <strong>Mirrors Management System</strong><p>", contact)
-		_ = UpdateTaskStatus(c.Id, constants.STATUS_FAILURE)
+		_ = UpdateTaskStatus(id, constants.STATUS_FAILURE)
 		_ = UpdateCiTaskResult(c.Id, "FAILURE")
 		return
 	}
 	for {
+		ct, _ := GetCiTaskById(c.Id)
+		if ct.Result != "" {
+			break
+		}
 		buildInfo, err := jenkins.GetBuildInfo(jobInfo, queueId)
 		if err != nil {
 			_ = utils.SendMail("warning", "<h3>Jenkins task build info fetch got error. Error messages are as follow:</h3><br><p>"+err.Error()+"</p><hr><p>Sent from <strong>Mirrors Management System</strong><p>", contact)
-			_ = UpdateTaskStatus(c.Id, constants.STATUS_FAILURE)
+			_ = UpdateTaskStatus(id, constants.STATUS_FAILURE)
 			_ = UpdateCiTaskResult(c.Id, "FAILURE")
 			break
 		}
@@ -160,6 +198,7 @@ func (c CITask) Handle(id int, upstream, contact, creator string) {
 			break
 		}
 		if buildInfo.Result == "SUCCESS" {
+			c.Result = "SUCCESS"
 			err = TaskProceed(c.TaskId)
 			if err != nil {
 				log.Errorf("Update task progress url found error:%#v", err)
@@ -182,7 +221,7 @@ func (c CITask) Handle(id int, upstream, contact, creator string) {
 
 func HandleMirrorOperation(id int, upstream, contact, creator string) {
 	log.Infof("Starting executing mirror checking:[%s]", upstream)
-	checker := checker2.NewCDNChecker(configs.NewServerConfig().CdnChecker)
+	checker := checker2.NewCDNChecker()
 	mirrors, err := mirror.GetMirrorsByUpstream(upstream)
 	if err != nil {
 		log.Errorf("Get mirrors by upstream:[%s] found error:%#v", upstream, err)

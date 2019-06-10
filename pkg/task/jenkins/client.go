@@ -70,7 +70,6 @@ func TriggerBuild(job *configs.JobInfo, params map[string]string, abort <-chan b
 			if err != nil {
 				return -1, err
 			}
-			log.Infof("Number %d", queueInfo.Executable.Number)
 			if queueInfo.Executable.Number != 0 {
 				buildID = queueInfo.Executable.Number
 				return buildID, nil
@@ -81,7 +80,6 @@ func TriggerBuild(job *configs.JobInfo, params map[string]string, abort <-chan b
 		}
 
 	}
-	//return buildID, nil
 }
 
 func LastBuildInfo(job *configs.JobInfo) (*BuildInfo, error) {

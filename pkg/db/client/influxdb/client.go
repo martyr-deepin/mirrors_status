@@ -4,14 +4,15 @@ import (
 	"fmt"
 	"mirrors_status/internal/config"
 	"mirrors_status/internal/log"
-	"mirrors_status/pkg/model/mirror"
+	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/influxdata/influxdb/client/v2"
 )
 
-func write(ps ...*client.Point) error {
+func Write(ps ...*client.Point) error {
 	bp, err := client.NewBatchPoints(client.BatchPointsConfig{
 		Database: configs.NewServerConfig().InfluxDB.DBName,
 	})
@@ -34,7 +35,9 @@ func InitInfluxClient() {
 	dbName := c.DBName
 	username := c.Username
 	password := c.Password
-	clt, err := client.NewHTTPClient(client.HTTPConfig{
+	log.Infof("trying connecting influxdb:%s %s", addr, username)
+	var err error
+	clt, err = client.NewHTTPClient(client.HTTPConfig{
 		Addr:     addr,
 		Username: username,
 		Password: password,
@@ -49,20 +52,19 @@ func InitInfluxClient() {
 	_, err = clt.Query(client.Query{
 		Command: fmt.Sprintf("create database %s", dbName),
 	})
-	return
 }
 
 func NewInfluxClient() (ct client.Client) {
 	return clt
 }
 
-func QueryDB(cmd string) (res []client.Result, err error) {
+func queryDB(cmd string) (res []client.Result, err error) {
 	log.Infof("Query influxdb:%s", cmd)
 	q := client.Query{
 		Command: cmd,
 		Database: configs.NewServerConfig().InfluxDB.DBName,
 	}
-	if resp, e := clt.Query(q); e == nil {
+	if resp, e := NewInfluxClient().Query(q); e == nil {
 		if resp.Error() != nil {
 			return res, resp.Error()
 		}
@@ -73,63 +75,153 @@ func QueryDB(cmd string) (res []client.Result, err error) {
 	return res, nil
 }
 
-func PushMirror(t time.Time, point mirror.MirrorsPoint) error {
-	var cPoints []*client.Point
-	p, err := client.NewPoint(
-		"mirrors",
-		map[string]string{
-			"name": point.Name,
-		},
-		map[string]interface{} {
-			"progress": point.Progress,
-			"latency": 0,
-		},
-		t)
-	if err != nil {
-		return err
-	}
-	log.Infof("Pushing mirror:%v", err)
-	cPoints = append(cPoints, p)
-	return write(cPoints...)
-}
-
-func PushMirrors(t time.Time, points []mirror.MirrorsPoint) error {
-	for _, p := range points {
-		err := PushMirror(time.Now(), p)
-		if err != nil {
-			return err
+func Select(measurement string, tags []string, where map[string]interface{}) (
+	data [][]interface{}, err error) {
+	clause := make([]string, 0)
+	for tag, val := range where {
+		typ := reflect.TypeOf(val)
+		switch typ.Kind() {
+		case reflect.Int, reflect.Int64:
+			clause = append(clause, fmt.Sprintf(`"%s" = %d`, tag, val))
+		case reflect.String:
+			clause = append(clause, fmt.Sprintf(`"%s" = '%s'`, tag, val))
 		}
 	}
-	return nil
-}
-
-func PushMirrorCdn(t time.Time, point mirror.MirrorsCdnPoint) error {
-	var cPoints []*client.Point
-	p, err := client.NewPoint(
-		"mirrors_cdn",
-		map[string]string{
-			"mirror_id":    point.MirrorId,
-			"node_ip_addr": point.NodeIpAddr,
-		},
-		map[string]interface{}{
-			"progress": point.Progress,
-		},
-		t)
-	if err != nil {
-		return err
+	query := fmt.Sprintf(`select %s from %s`, strings.Join(tags, ","), measurement)
+	if len(clause) != 0 {
+		query += " where " + strings.Join(clause, " and ")
 	}
-	cPoints = append(cPoints, p)
-	return write(cPoints...)
+	rawdata, err := queryDB(query)
+	if err != nil {
+		return
+	}
+	if len(rawdata) == 0 || len(rawdata[0].Series) == 0 {
+		err = fmt.Errorf("influxdb return empty value")
+		return
+	}
+	data = rawdata[0].Series[0].Values
+	return
 }
 
-func PushMirrorsCdn(t time.Time, points []mirror.MirrorsCdnPoint) error {
-	for _, p := range points {
-		err := PushMirrorCdn(time.Now(), p)
-		if err != nil {
-			return err
+func LastValue(measurement, tag, field string) (data map[string]Value, err error) {
+	query := fmt.Sprintf(`select last(%s) from %s group by "%s"`, field, measurement, tag)
+	rawdata, err := queryDB(query)
+	if err != nil {
+		return
+	}
+	if len(rawdata) == 0 {
+		err = fmt.Errorf("influxdb return empty value")
+		return
+	}
+	results := rawdata[0]
+	data = make(map[string]Value, len(results.Series))
+	for _, serial := range results.Series {
+		if serial.Values == nil || len(serial.Values) == 0 {
+			log.Info("influxdb returned 0 value")
+			continue
+		} else {
+			values := serial.Values[0]
+			if len(values) < 2 {
+				log.Info("influxdb return invalid value")
+				continue
+			}
+			timestamp, _ := time.Parse(time.RFC3339Nano, values[0].(string))
+			value := values[1]
+			data[serial.Name] = Value{
+				Value:     value.(float64),
+				Timestamp: timestamp,
+			}
+			log.Infof("mirror: %v, progress: %v", serial.Name, value.(float64))
 		}
 	}
-	return nil
+	return
 }
 
+func LatestMirrorData(measurement, last, tag string, where map[string]interface{}, group string) (data [][]interface{}, err error) {
+	clause := make([]string, 0)
+	for t, val := range where {
+		typ := reflect.TypeOf(val)
+		switch typ.Kind() {
+		case reflect.Int, reflect.Int64:
+			clause = append(clause, fmt.Sprintf(`"%s" = %d`, t, val))
+		case reflect.String:
+			clause = append(clause, fmt.Sprintf(`"%s" = '%s'`, t, val))
+		}
+	}
+	query := fmt.Sprintf(`select last(%s)`, last)
+	if tag != "" {
+		query += fmt.Sprintf(",%s", tag)
+	}
+	query += fmt.Sprintf(" from %s", measurement)
+	if len(clause) != 0 {
+		query += " where " + strings.Join(clause, " and ")
+	}
+	if group != "" {
+		query += fmt.Sprintf(" group by %s", group)
+	}
+	rawdata, err := queryDB(query)
+	if err != nil {
+		return
+	}
+	if len(rawdata) == 0 || len(rawdata[0].Series) == 0 {
+		err = fmt.Errorf("influxdb return empty value")
+		return
+	}
+	data = rawdata[0].Series[0].Values
+	return
+}
 
+func LatestCdnData(measurement, last, tag string, where map[string]interface{}, group string) (data [][][]interface{}, err error) {
+	clause := make([]string, 0)
+	for t, val := range where {
+		typ := reflect.TypeOf(val)
+		switch typ.Kind() {
+		case reflect.Int, reflect.Int64:
+			clause = append(clause, fmt.Sprintf(`"%s" = %d`, t, val))
+		case reflect.String:
+			clause = append(clause, fmt.Sprintf(`"%s" = '%s'`, t, val))
+		}
+	}
+	query := fmt.Sprintf(`select last(%s)`, last)
+	if tag != "" {
+		query += fmt.Sprintf(",%s", tag)
+	}
+	query += fmt.Sprintf(" from %s", measurement)
+	if len(clause) != 0 {
+		query += " where " + strings.Join(clause, " and ")
+	}
+	if group != "" {
+		query += fmt.Sprintf(" group by %s", group)
+	}
+	rawdata, err := queryDB(query)
+	if err != nil {
+		return
+	}
+	if len(rawdata) == 0 || len(rawdata[0].Series) == 0 {
+		err = fmt.Errorf("influxdb return empty value")
+		return
+	}
+	for _, d := range rawdata {
+		for _, s := range d.Series {
+			data = append(data, s.Values)
+		}
+	}
+	//data = rawdata[0].Series[0].Values
+	return
+}
+
+type Data struct {
+	Results []struct {
+		Series []struct {
+			Tags struct {
+				Name string `json:"name"`
+			} `json:"tags"`
+			Values [][]interface{} `json:"values"`
+		} `json:"series"`
+	} `json:"results"`
+}
+
+type Value struct {
+	Value     interface{}
+	Timestamp time.Time
+}
