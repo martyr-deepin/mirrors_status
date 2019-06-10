@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"github.com/gin-gonic/gin"
-	"mirrors_status/pkg/db/client/redis"
+	"mirrors_status/pkg/db/redis"
 	"net/http"
 )
 

@@ -8,8 +8,8 @@ import (
 	"github.com/influxdata/influxdb/client/v2"
 	configs "mirrors_status/internal/config"
 	"mirrors_status/internal/log"
-	"mirrors_status/pkg/db/client/influxdb"
-	"mirrors_status/pkg/db/client/mysql"
+	"mirrors_status/pkg/db/influxdb"
+	"mirrors_status/pkg/db/mysql"
 	"time"
 )
 
