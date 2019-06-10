@@ -137,7 +137,7 @@ func LastValue(measurement, tag, field string) (data map[string]Value, err error
 	return
 }
 
-func LatestData(measurement, last, tag string, where map[string]interface{}, group string) (data [][]interface{}, err error) {
+func LatestMirrorData(measurement, last, tag string, where map[string]interface{}, group string) (data [][]interface{}, err error) {
 	clause := make([]string, 0)
 	for t, val := range where {
 		typ := reflect.TypeOf(val)
@@ -168,6 +168,45 @@ func LatestData(measurement, last, tag string, where map[string]interface{}, gro
 		return
 	}
 	data = rawdata[0].Series[0].Values
+	return
+}
+
+func LatestCdnData(measurement, last, tag string, where map[string]interface{}, group string) (data [][][]interface{}, err error) {
+	clause := make([]string, 0)
+	for t, val := range where {
+		typ := reflect.TypeOf(val)
+		switch typ.Kind() {
+		case reflect.Int, reflect.Int64:
+			clause = append(clause, fmt.Sprintf(`"%s" = %d`, t, val))
+		case reflect.String:
+			clause = append(clause, fmt.Sprintf(`"%s" = '%s'`, t, val))
+		}
+	}
+	query := fmt.Sprintf(`select last(%s)`, last)
+	if tag != "" {
+		query += fmt.Sprintf(",%s", tag)
+	}
+	query += fmt.Sprintf(" from %s", measurement)
+	if len(clause) != 0 {
+		query += " where " + strings.Join(clause, " and ")
+	}
+	if group != "" {
+		query += fmt.Sprintf(" group by %s", group)
+	}
+	rawdata, err := queryDB(query)
+	if err != nil {
+		return
+	}
+	if len(rawdata) == 0 || len(rawdata[0].Series) == 0 {
+		err = fmt.Errorf("influxdb return empty value")
+		return
+	}
+	for _, d := range rawdata {
+		for _, s := range d.Series {
+			data = append(data, s.Values)
+		}
+	}
+	//data = rawdata[0].Series[0].Values
 	return
 }
 

@@ -87,7 +87,7 @@ type CdnNodeCompletion struct {
 
 type Mirror struct {
 	Mid int    `gorm:"primary_key" json:"index"`
-	Id  string `gorm:"type:varchar(64)" json:"id"`
+	Id  string `gorm:"type:varchar(64),unique" json:"id"`
 
 	//Type     MirrorType
 	Name     string `gorm:"type:varchar(64)" json:"name"`
@@ -123,7 +123,7 @@ func DeleteMirror(index int) error {
 }
 
 func (m Mirror) UpdateMirror() error {
-	return mysql.NewMySQLClient().Table("mirrors").Updates(&m, true).Error
+	return mysql.NewMySQLClient().Table("mirrors").Where("mid = ?", m.Mid).Updates(&m, true).Error
 }
 
 func GetMirrorsByUpstream(upstream string) (mirrors []Mirror, err error) {
@@ -181,9 +181,26 @@ func interface2Float(data interface{}) (float64, error) {
 	return -1, errors.New("parameter error")
 }
 
+func influxData2Map(data [][][]interface{}) (map[string]float64, error) {
+	if len(data) == 0 || len(data[0]) == 0 {
+		return nil, nil
+	}
+	res := make(map[string]float64)
+	for _, d := range data {
+		if v, ok := d[0][1].(json.Number); ok {
+			progress, err := v.Float64()
+			if err != nil {
+				return nil, err
+			}
+			res[d[0][2].(string)] = progress
+		}
+	}
+	return res, nil
+}
+
 func (m *Mirror) GetMirrorCompletion() (err error) {
 	if m.UrlHttps != "" {
-		data, err := influxdb.LatestData("mirrors", "progress", "", map[string]interface{}{"name": m.UrlHttps}, "")
+		data, err := influxdb.LatestMirrorData("mirrors", "progress", "", map[string]interface{}{"name": m.UrlHttps}, "")
 		if err != nil {
 			return err
 		}
@@ -196,7 +213,7 @@ func (m *Mirror) GetMirrorCompletion() (err error) {
 		}
 	}
 	if m.UrlHttp != "" {
-		data, err := influxdb.LatestData("mirrors", "progress", "", map[string]interface{}{"name": m.UrlHttp}, "")
+		data, err := influxdb.LatestMirrorData("mirrors", "progress", "", map[string]interface{}{"name": m.UrlHttp}, "")
 		if err != nil {
 			return err
 		}
@@ -209,7 +226,7 @@ func (m *Mirror) GetMirrorCompletion() (err error) {
 		}
 	}
 	if m.UrlFtp != "" {
-		data, err := influxdb.LatestData("mirrors", "progress", "", map[string]interface{}{"name": m.UrlFtp}, "")
+		data, err := influxdb.LatestMirrorData("mirrors", "progress", "", map[string]interface{}{"name": m.UrlFtp}, "")
 		if err != nil {
 			return err
 		}
@@ -222,7 +239,7 @@ func (m *Mirror) GetMirrorCompletion() (err error) {
 		}
 	}
 	if m.UrlRsync != "" {
-		data, err := influxdb.LatestData("mirrors", "progress", "", map[string]interface{}{"name": m.UrlRsync}, "")
+		data, err := influxdb.LatestMirrorData("mirrors", "progress", "", map[string]interface{}{"name": m.UrlRsync}, "")
 		if err != nil {
 			return err
 		}
@@ -238,8 +255,20 @@ func (m *Mirror) GetMirrorCompletion() (err error) {
 }
 
 func (m *Mirror) GetMirrorCdnCompletion() (err error) {
-	data, err := influxdb.LatestData("mirrors_cdn", "progress", "node_ip_addr", map[string]interface{}{"mirror_id": m.Id}, "node_ip_addr")
-	log.Info(data)
+	data, err := influxdb.LatestCdnData("mirrors_cdn", "progress", "node_ip_addr", map[string]interface{}{"mirror_id": m.Id}, "node_ip_addr")
+	if err != nil {
+		return  err
+	}
+	resMap, err := influxData2Map(data)
+	if err != nil {
+		return  err
+	}
+	for v, k := range resMap {
+		m.CdnCompletion = append(m.CdnCompletion, CdnNodeCompletion{
+			NodeName: v,
+			Completion: k,
+		})
+	}
 	return nil
 }
 

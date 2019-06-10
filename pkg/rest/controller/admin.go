@@ -5,6 +5,7 @@ import (
 	"mirrors_status/internal/log"
 	"mirrors_status/pkg/mirror/checker"
 	"mirrors_status/pkg/model/archive"
+	"mirrors_status/pkg/model/constants"
 	mirror2 "mirrors_status/pkg/model/mirror"
 	"mirrors_status/pkg/model/operation"
 	task2 "mirrors_status/pkg/model/task"
@@ -254,6 +255,36 @@ func AbortTask(c *gin.Context) {
 	}
 	err = task2.CloseTask(id)
 	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.UPDATE_TASK_STATUS_FAILED))
+		return
+	}
+	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SuccessResp()))
+}
+
+func UpdateTaskStatus(c *gin.Context) {
+	pathId := c.Param("id")
+	id, err := strconv.Atoi(pathId)
+	if err != nil {
+		log.Errorf("Parse path param id:%d found error:%v", pathId, err)
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.PARAMETER_ERROR))
+		return
+	}
+	pathStatus := c.Param("status")
+	status, err := strconv.Atoi(pathStatus)
+	if err != nil {
+		log.Errorf("Parse path param id:%d found error:%v", pathId, err)
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.PARAMETER_ERROR))
+		return
+	}
+	err = task2.UpdateTaskStatus(id, constants.MirrorOperationStatus(status))
+	if err != nil {
+		log.Errorf("Update task status by task id:%d found error:%v", pathId, err)
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.UPDATE_TASK_STATUS_FAILED))
+		return
+	}
+	err = task2.CloseTask(id)
+	if err != nil {
+		log.Errorf("Update task status by task id:%d found error:%v", pathId, err)
 		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.UPDATE_TASK_STATUS_FAILED))
 		return
 	}
