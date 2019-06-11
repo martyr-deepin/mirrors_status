@@ -1,9 +1,11 @@
-package utils
+package ldap
 
 import (
 	"crypto/tls"
 	"fmt"
 	ldapBase "gopkg.in/ldap.v2"
+	"mirrors_status/internal/config"
+	"mirrors_status/internal/log"
 	"time"
 )
 
@@ -14,19 +16,20 @@ type Client struct {
 	search   string
 }
 
-func NewClient(host string, port int, dn, password, search string) (
+func NewLdapClient() (
 	client *Client, err error) {
+	config := configs.NewServerConfig().Ldap
 	ldapBase.DefaultTimeout = 20 * time.Second
-	conn, err := ldapBase.DialTLS("tcp", host+":"+fmt.Sprint(port),
+	conn, err := ldapBase.DialTLS("tcp", config.Server+":"+fmt.Sprint(config.Port),
 		&tls.Config{InsecureSkipVerify: true})
 	if err != nil {
 		return
 	}
 	client = &Client{
 		conn:     conn,
-		dn:       dn,
-		password: password,
-		search:   search,
+		dn:       config.Dn,
+		password: config.Passwd,
+		search:   config.USearch,
 	}
 	return
 }
@@ -51,6 +54,7 @@ func (c *Client) CheckUserPassword(username, password string) (err error) {
 		[]string{"dn"}, nil)
 	resp, err := c.conn.Search(req)
 	if err != nil {
+		log.Errorf("search for username:%s found error:[%v]", username, err)
 		return
 	}
 	if len(resp.Entries) != 1 {

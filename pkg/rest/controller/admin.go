@@ -3,6 +3,7 @@ package controller
 import (
 	"github.com/gin-gonic/gin"
 	"mirrors_status/internal/log"
+	"mirrors_status/pkg/db/redis"
 	"mirrors_status/pkg/mirror/checker"
 	"mirrors_status/pkg/model/archive"
 	"mirrors_status/pkg/model/constants"
@@ -316,4 +317,62 @@ func GetAllArchives(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SetData("archives", archives)))
+}
+
+func Logout(c *gin.Context) {
+	username, err := c.Cookie("username")
+	if err != nil {
+		log.Errorf("Get cookie username found error:%#v", err)
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.GET_COOKIE_ERROR))
+		return
+	}
+	sessionId, err := c.Cookie("sessionId")
+	if err != nil {
+		log.Errorf("Get cookie sessionId found error:%#v", err)
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.GET_COOKIE_ERROR))
+		return
+	}
+	redisSessionId, err := redis.Get(username + "-session-id")
+	if err != nil {
+		log.Errorf("Get redis sessionId found error:%#v", err)
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
+		return
+	}
+	if sessionId != redisSessionId {
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.USER_NOT_LOGIN))
+		return
+	}
+	err = redis.Del(username + "-session-id")
+	if err != nil {
+		log.Errorf("Del redis sessionId found error:%#v", err)
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
+		return
+	}
+	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SuccessResp()))
+}
+
+func GetLoginStatus(c *gin.Context) {
+	username, err := c.Cookie("username")
+	if err != nil {
+		log.Errorf("Get cookie username found error:%#v", err)
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.GET_COOKIE_ERROR))
+		return
+	}
+	sessionId, err := c.Cookie("sessionId")
+	if err != nil {
+		log.Errorf("Get cookie sessionId found error:%#v", err)
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.GET_COOKIE_ERROR))
+		return
+	}
+	redisSessionId, err := redis.Get(username + "-session-id")
+	if err != nil {
+		log.Errorf("Get redis sessionId found error:%#v", err)
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
+		return
+	}
+	if sessionId != redisSessionId {
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.USER_NOT_LOGIN))
+		return
+	}
+	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SuccessResp()))
 }

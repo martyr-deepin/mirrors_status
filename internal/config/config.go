@@ -43,10 +43,10 @@ type CdnCheckerConf struct {
 type LdapConf struct {
 	Server string `yml:"server"`
 	Port int `yml:"port"`
-	BindDn string `yml:"bind_dn"`
-	BindPasswd string `yml:"bind_passwd"`
-	UserSearch string `yml:"user_search"`
-	GroupSearch string `yml:"group_search"`
+	Dn string `yml:"dn"`
+	Passwd string `yml:"passwd"`
+	USearch string `yml:"usearch"`
+	GSearch string `yml:"gsearch"`
 }
 
 type MailConf struct {

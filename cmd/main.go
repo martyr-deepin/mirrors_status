@@ -45,10 +45,5 @@ func main() {
 	rest.InitGuestController(r)
 	rest.InitAdminController(r)
 
-	//r.POST("/check/:username", app.CheckMirrorsByUpstream)
-	//r.GET("/history", app.OperationHistory)
-	//r.GET("/history/:mirror", app.OperationHistoryByMirror)
-	//r.GET("/operation/:index", app.GetOperationByIndex)
-
 	r.Run(":" + strconv.Itoa(configs.NewServerConfig().Http.Port))
 }
