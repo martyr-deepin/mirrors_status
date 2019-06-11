@@ -36,10 +36,9 @@ cdn-checker:
 ldap:
   server: 0.ldap.deepin.cn
   port: 636
-  bind_dn: cn=cms,ou=manage,dc=sndu,dc=cn
-  bind_passwd: password
-  user_search: search
-  group_search: search
+  bind-dn: cn=cms,ou=manage,dc=sndu,dc=cn
+  bind-passwd: password
+  user-search: search
 
 # Trigger information related to jenkins.yml
 jenkins:
@@ -60,7 +59,3 @@ mail:
 redis:
   host: localhost
   port: 6379
-  username:
-  password:
-  # Redis database index
-  db: 0

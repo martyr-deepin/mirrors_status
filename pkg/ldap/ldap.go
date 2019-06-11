@@ -27,9 +27,9 @@ func NewLdapClient() (
 	}
 	client = &Client{
 		conn:     conn,
-		dn:       config.Dn,
-		password: config.Passwd,
-		search:   config.USearch,
+		dn:       config.BindDn,
+		password: config.BindPasswd,
+		search:   config.UserSearch,
 	}
 	return
 }

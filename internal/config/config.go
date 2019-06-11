@@ -41,19 +41,18 @@ type CdnCheckerConf struct {
 }
 
 type LdapConf struct {
-	Server string `yml:"server"`
-	Port int `yml:"port"`
-	Dn string `yml:"dn"`
-	Passwd string `yml:"passwd"`
-	USearch string `yml:"usearch"`
-	GSearch string `yml:"gsearch"`
+	Server string `yaml:"server"`
+	Port int `yaml:"port"`
+	BindDn string `yaml:"bind-dn"`
+	BindPasswd string `yaml:"bind-passwd"`
+	UserSearch string `yaml:"user-search"`
 }
 
 type MailConf struct {
-	Host string `yml:"host"`
-	Port int `yml:"port"`
-	Username string `yml:"username"`
-	Password string `yml:"password"`
+	Host string `yaml:"host"`
+	Port int `yaml:"port"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
 }
 
 type JenkinsConf struct {
@@ -66,8 +65,6 @@ type JenkinsConf struct {
 type RedisConf struct {
 	Host string `yml:"host"`
 	Port int `yml:"port"`
-	Username string `yml:"username"`
-	Password string `yml:"password"`
 	DBName int `yml:"client"`
 }
 
