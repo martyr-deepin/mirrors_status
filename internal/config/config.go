@@ -41,34 +41,31 @@ type CdnCheckerConf struct {
 }
 
 type LdapConf struct {
-	Server string `yml:"server"`
-	Port int `yml:"port"`
-	Dn string `yml:"dn"`
-	Passwd string `yml:"passwd"`
-	USearch string `yml:"usearch"`
-	GSearch string `yml:"gsearch"`
+	Server string `yaml:"server"`
+	Port int `yaml:"port"`
+	BindDn string `yaml:"bind-dn"`
+	BindPasswd string `yaml:"bind-passwd"`
+	UserSearch string `yaml:"user-search"`
 }
 
 type MailConf struct {
-	Host string `yml:"host"`
-	Port int `yml:"port"`
-	Username string `yml:"username"`
-	Password string `yml:"password"`
+	Host string `yaml:"host"`
+	Port int `yaml:"port"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
 }
 
 type JenkinsConf struct {
-	Addr string `yml:"addr"`
+	Addr string `yaml:"addr"`
 	Trigger string `yml:"trigger"`
-	Delay int `yml:"delay"`
-	Retry int `yml:"retry"`
+	Delay int `yaml:"delay"`
+	Retry int `yaml:"retry"`
 }
 
 type RedisConf struct {
-	Host string `yml:"host"`
-	Port int `yml:"port"`
-	Username string `yml:"username"`
-	Password string `yml:"password"`
-	DBName int `yml:"client"`
+	Host string `yaml:"host"`
+	Port int `yaml:"port"`
+	DBName int `yaml:"client"`
 }
 
 type ServerConf struct {
@@ -76,10 +73,10 @@ type ServerConf struct {
 	MySQLDB *MySQLConf `yaml:"mysql"`
 	Http     *HttpConf     `yaml:"http"`
 	CdnChecker *CdnCheckerConf `yaml:"cdn-checker"`
-	Ldap *LdapConf `yml:"ldap"`
-	Mail *MailConf `yml:"mail"`
-	Jenkins *JenkinsConf `yml:"jenkins"`
-	Redis *RedisConf `yml:"redis"`
+	Ldap *LdapConf `yaml:"ldap"`
+	Mail *MailConf `yaml:"mail"`
+	Jenkins *JenkinsConf `yaml:"jenkins"`
+	Redis *RedisConf `yaml:"redis"`
 }
 
 func ErrHandler(op string, err error) {
