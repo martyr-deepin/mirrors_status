@@ -87,7 +87,7 @@ type CdnNodeCompletion struct {
 
 type Mirror struct {
 	Mid int    `gorm:"primary_key" json:"index"`
-	Id  string `gorm:"type:varchar(64),unique" json:"id"`
+	Id  string `gorm:"type:varchar(64);unique" json:"id"`
 
 	//Type     MirrorType
 	Name     string `gorm:"type:varchar(64)" json:"name"`
