@@ -34,5 +34,6 @@ func InitAdminController(engine *gin.Engine) {
 	r.GET("/archives", controller.GetAllArchives)
 	r.DELETE("/session", controller.Logout)
 	r.GET("/session", controller.GetLoginStatus)
+	r.POST("/mail", controller.SendMail)
 }
 

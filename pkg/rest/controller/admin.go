@@ -376,3 +376,24 @@ func GetLoginStatus(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SuccessResp()))
 }
+
+type MailReq struct {
+	Mails []string `json:"mails"`
+	Subject string `json:"subject"`
+	Content string `json:"content"`
+}
+
+func SendMail(c *gin.Context) {
+	var mailReq MailReq
+	err := c.BindJSON(&mailReq)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.PARAMETER_ERROR))
+		return
+	}
+	err = utils.SendMail(mailReq.Subject, mailReq.Content, mailReq.Mails...)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.ErrorHelper(err, utils.UNKNOWN_ERROR))
+		return
+	}
+	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SuccessResp()))
+}
