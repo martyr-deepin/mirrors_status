@@ -3,7 +3,7 @@ package archive
 import (
 	"encoding/json"
 	"mirrors_status/internal/log"
-	"mirrors_status/pkg/db/client/mysql"
+	"mirrors_status/pkg/db/mysql"
 	"mirrors_status/pkg/model/mirror"
 	"mirrors_status/pkg/model/operation"
 	"mirrors_status/pkg/model/task"

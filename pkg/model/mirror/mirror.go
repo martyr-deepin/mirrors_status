@@ -8,8 +8,8 @@ import (
 	"github.com/influxdata/influxdb/client/v2"
 	configs "mirrors_status/internal/config"
 	"mirrors_status/internal/log"
-	"mirrors_status/pkg/db/client/influxdb"
-	"mirrors_status/pkg/db/client/mysql"
+	"mirrors_status/pkg/db/influxdb"
+	"mirrors_status/pkg/db/mysql"
 	"time"
 )
 
@@ -87,7 +87,7 @@ type CdnNodeCompletion struct {
 
 type Mirror struct {
 	Mid int    `gorm:"primary_key" json:"index"`
-	Id  string `gorm:"type:varchar(64),unique" json:"id"`
+	Id  string `gorm:"type:varchar(64);unique" json:"id"`
 
 	//Type     MirrorType
 	Name     string `gorm:"type:varchar(64)" json:"name"`

@@ -5,7 +5,7 @@ import (
 	"github.com/jinzhu/gorm"
 	configs "mirrors_status/internal/config"
 	"mirrors_status/internal/log"
-	"mirrors_status/pkg/db/client/mysql"
+	"mirrors_status/pkg/db/mysql"
 	checker2 "mirrors_status/pkg/mirror/checker"
 	"mirrors_status/pkg/model/constants"
 	"mirrors_status/pkg/model/mirror"

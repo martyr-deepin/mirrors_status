@@ -5,9 +5,9 @@ import (
 	"github.com/gin-gonic/gin"
 	configs "mirrors_status/internal/config"
 	"mirrors_status/internal/log"
-	"mirrors_status/pkg/db/client/influxdb"
-	"mirrors_status/pkg/db/client/mysql"
-	"mirrors_status/pkg/db/client/redis"
+	"mirrors_status/pkg/db/influxdb"
+	"mirrors_status/pkg/db/mysql"
+	"mirrors_status/pkg/db/redis"
 	"mirrors_status/pkg/model/archive"
 	"mirrors_status/pkg/model/mirror"
 	"mirrors_status/pkg/model/operation"
@@ -44,11 +44,6 @@ func main() {
 
 	rest.InitGuestController(r)
 	rest.InitAdminController(r)
-
-	//r.POST("/check/:username", app.CheckMirrorsByUpstream)
-	//r.GET("/history", app.OperationHistory)
-	//r.GET("/history/:mirror", app.OperationHistoryByMirror)
-	//r.GET("/operation/:index", app.GetOperationByIndex)
 
 	r.Run(":" + strconv.Itoa(configs.NewServerConfig().Http.Port))
 }

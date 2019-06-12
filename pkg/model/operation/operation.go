@@ -2,7 +2,7 @@ package operation
 
 import (
 	"github.com/jinzhu/gorm"
-	"mirrors_status/pkg/db/client/mysql"
+	"mirrors_status/pkg/db/mysql"
 	"mirrors_status/pkg/model/constants"
 	"time"
 )

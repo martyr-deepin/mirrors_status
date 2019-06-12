@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"github.com/gin-gonic/gin"
-	"mirrors_status/pkg/db/client/redis"
+	"mirrors_status/pkg/db/redis"
 	"net/http"
 )
 
@@ -14,16 +14,16 @@ func Auth() gin.HandlerFunc {
 			c.String(http.StatusUnauthorized, "username cookie expired")
 			return
 		}
-		session_id, err := c.Cookie("session_id")
+		session_id, err := c.Cookie("sessionId")
 		if err != nil {
 			c.Abort()
-			c.String(http.StatusUnauthorized, "cookie session_id expired")
+			c.String(http.StatusUnauthorized, "cookie sessionId expired")
 			return
 		}
-		redisSession, err := redis.Get(username + "-session_id")
+		redisSession, err := redis.Get(username + "-session-id")
 		if err != nil {
 			c.Abort()
-			c.String(http.StatusUnauthorized, "cookie session_id illegal")
+			c.String(http.StatusUnauthorized, "cookie sessionId illegal")
 			return
 		}
 		if session_id == redisSession {

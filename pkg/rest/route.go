@@ -2,6 +2,7 @@ package rest
 
 import (
 	"github.com/gin-gonic/gin"
+	"mirrors_status/internal/middleware"
 	"mirrors_status/pkg/rest/controller"
 )
 
@@ -11,10 +12,12 @@ func InitGuestController(engine *gin.Engine) {
 	r.GET("/mirrors", controller.GetAllMirrors)
 	r.GET("/mirrors/:upstream", controller.GetMirrorsByUpstream)
 	r.GET("/upstreams", controller.GetAllUpstreams)
+	r.POST("/session", controller.Login)
 }
 
 func InitAdminController(engine *gin.Engine) {
 	r := engine.Group("/api/v1/admin")
+	r.Use(middleware.Auth())
 
 	r.POST("/mirrors", controller.CreateMirror)
 	r.DELETE("/mirrors/:id", controller.DeleteMirror)
@@ -29,5 +32,8 @@ func InitAdminController(engine *gin.Engine) {
 	r.PATCH("/tasks/:id/:status", controller.UpdateTaskStatus)
 	r.GET("/archives/:id", controller.GetArchiveByTaskId)
 	r.GET("/archives", controller.GetAllArchives)
+	r.DELETE("/session", controller.Logout)
+	r.GET("/session", controller.GetLoginStatus)
+	r.POST("/mail", controller.SendMail)
 }
 
