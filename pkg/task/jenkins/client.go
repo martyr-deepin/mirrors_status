@@ -166,3 +166,13 @@ func GetMirrorJobsByUpstream(upstream string) configs.JobInfoList {
 	}
 	return nil
 }
+
+func GetPublishJobsByUpstream(upstream string) configs.JobInfoList {
+	jenkinsConf := configs.NewJenkinsConfig()
+	for _, repo := range jenkinsConf.PublishMirrors {
+		if repo.Name == upstream {
+			return repo.Jobs
+		}
+	}
+	return nil
+}

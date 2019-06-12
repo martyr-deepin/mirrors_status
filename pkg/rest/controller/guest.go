@@ -38,6 +38,11 @@ func GetAllUpstreams(c *gin.Context) {
 	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SetData("upstreams", upstreams)))
 }
 
+func GetPublishUpstreams(c *gin.Context) {
+	upstreams := mirror.GetPublishUpstreams()
+	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SetData("publish_upstreams", upstreams)))
+}
+
 type LoginReq struct {
 	Username string `json:"username"`
 	Password string `json:"password"`

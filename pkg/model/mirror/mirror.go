@@ -170,6 +170,17 @@ func GetMirrorUpstreams() (upstreamList configs.RepositoryInfoList) {
 	return upstreamList
 }
 
+func GetPublishUpstreams() (upstreamList configs.RepositoryInfoList) {
+	jenkinsConfig := configs.NewJenkinsConfig()
+	upstreamList = jenkinsConfig.PublishMirrors
+	for _, upstream := range upstreamList {
+		for _, job := range upstream.Jobs {
+			job.Token = ""
+		}
+	}
+	return upstreamList
+}
+
 func interface2Float(data interface{}) (float64, error) {
 	if v, ok := data.(json.Number); ok {
 		progress, err := v.Float64()

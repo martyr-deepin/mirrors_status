@@ -12,6 +12,7 @@ func InitGuestController(engine *gin.Engine) {
 	r.GET("/mirrors", controller.GetAllMirrors)
 	r.GET("/mirrors/:upstream", controller.GetMirrorsByUpstream)
 	r.GET("/upstreams", controller.GetAllUpstreams)
+	r.GET("/publish", controller.GetPublishUpstreams)
 	r.POST("/session", controller.Login)
 }
 

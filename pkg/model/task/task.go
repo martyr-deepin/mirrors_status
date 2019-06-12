@@ -29,7 +29,16 @@ type Task struct {
 	MirrorOperationStart  time.Time                       `gorm:"default:null" json:"mirror_operation_start"`
 	MirrorOperationStatus constants.MirrorOperationStatus `gorm:"type:tinyint(1)" json:"mirror_operation_status"`
 	Progress              int                             `gorm:"default:0" json:"progress"`
+
+	Type TaskType `sql:"-" json:"type"`
 }
+
+type TaskType int
+
+const (
+	MirrorType  TaskType = 0
+	PublishType TaskType = 1
+)
 
 type CITask struct {
 	Id          int       `gorm:"primary_key" json:"id"`
