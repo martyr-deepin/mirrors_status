@@ -2,6 +2,7 @@ package controller
 
 import (
 	"github.com/gin-gonic/gin"
+	"mirrors_status/internal/config"
 	"mirrors_status/internal/log"
 	"mirrors_status/pkg/db/redis"
 	"mirrors_status/pkg/mirror/checker"
@@ -91,7 +92,13 @@ func CreateTask(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.CREATE_TASK_FAILED))
 		return
 	}
-	jobs := jenkins.GetMirrorJobsByUpstream(task.Upstream)
+	var jobs configs.JobInfoList
+	log.Infof("%v", task)
+	if task.Type == task2.PublishType {
+		jobs = jenkins.GetPublishJobsByUpstream(task.Upstream)
+	} else {
+		jobs = jenkins.GetMirrorJobsByUpstream(task.Upstream)
+	}
 	for _, job := range jobs {
 		err = task2.CITask{
 			TaskId: t.Id,
