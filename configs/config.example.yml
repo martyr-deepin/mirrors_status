@@ -1,6 +1,10 @@
 http:
   host: 127.0.0.1
   port: 8080
+  allow-origin:
+    - "http://127.0.0.1:8081"
+    - "http://localhost:8081"
+  admin-mail: 1074687883@qq.com
 
 influxdb:
   host: 127.0.0.1

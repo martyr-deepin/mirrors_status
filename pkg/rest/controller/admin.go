@@ -93,7 +93,6 @@ func CreateTask(c *gin.Context) {
 		return
 	}
 	var jobs configs.JobInfoList
-	log.Infof("%v", task)
 	if task.Type == task2.PublishType {
 		jobs = jenkins.GetPublishJobsByUpstream(task.Upstream)
 	} else {
@@ -138,7 +137,7 @@ func GetTaskById(c *gin.Context) {
 	task, err := task2.GetTaskById(id)
 	if err != nil {
 		log.Errorf("Get task by id:[%d] found error:%#v", id, err)
-		c.JSON(http.StatusNoContent, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
 		return
 	}
 	var mirrorOperation operation.MirrorOperation
@@ -148,7 +147,7 @@ func GetTaskById(c *gin.Context) {
 	ciTasks, err := task2.GetCiTasksById(id)
 	if err != nil {
 		log.Errorf("Get ci tasks by id:[%d] found error:%#v", id, err)
-		c.JSON(http.StatusNoContent, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
 		return
 	}
 	for _, ciTask := range ciTasks {
@@ -168,7 +167,7 @@ func GetIOpenTasks(c *gin.Context) {
 	tasks, err := task2.GetOpenTasks()
 	if err != nil {
 		log.Errorf("Get open tasks found error:%#v", err)
-		c.JSON(http.StatusNoContent, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
 		return
 	}
 	for _, task := range tasks {
@@ -179,7 +178,7 @@ func GetIOpenTasks(c *gin.Context) {
 		ciTasks, err := task2.GetCiTasksById(task.Id)
 		if err != nil {
 			log.Errorf("Get ci tasks by id:[%d] found error:%#v", task.Id, err)
-			c.JSON(http.StatusNoContent, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
+			c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
 			return
 		}
 		for _, ciTask := range ciTasks {
@@ -310,7 +309,7 @@ func GetArchiveByTaskId(c *gin.Context) {
 	archive, err := archive.GetArchiveByTaskId(id)
 	if err != nil {
 		log.Errorf("Get archive by id:[%d] found error:%#v", id, err)
-		c.JSON(http.StatusNoContent, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
 		return
 	}
 	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SetData("archive", archive)))
@@ -320,7 +319,7 @@ func GetAllArchives(c *gin.Context) {
 	archives, err := archive.GetAllArchives()
 	if err != nil {
 		log.Errorf("Get archives found error:%#v", err)
-		c.JSON(http.StatusNoContent, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
 		return
 	}
 	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SetData("archives", archives)))
@@ -381,7 +380,7 @@ func GetLoginStatus(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.USER_NOT_LOGIN))
 		return
 	}
-	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SuccessResp()))
+	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SetData("username", username)))
 }
 
 type MailReq struct {

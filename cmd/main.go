@@ -39,7 +39,8 @@ func main() {
 	Init()
 	r := gin.Default()
 	corsConfig := cors.DefaultConfig()
-	corsConfig.AllowOrigins=[]string{configs.NewServerConfig().Http.AllowOrigin}
+	corsConfig.AllowOrigins = configs.NewServerConfig().Http.AllowOrigin
+	corsConfig.AllowCredentials = true
 	r.Use(cors.New(corsConfig))
 
 	rest.InitGuestController(r)

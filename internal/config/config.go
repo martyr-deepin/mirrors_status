@@ -18,7 +18,7 @@ type InfluxDBConf struct {
 type HttpConf struct {
 	Port int `yaml:"port"`
 	Host string `yaml:"host"`
-	AllowOrigin string `yaml:"allow-origin"`
+	AllowOrigin []string `yaml:"allow-origin"`
 	AdminMail string `yaml:"admin-mail"`
 }
 

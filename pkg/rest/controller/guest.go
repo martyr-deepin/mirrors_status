@@ -13,6 +13,11 @@ import (
 )
 
 func GetAllMirrors(ctx *gin.Context) {
+	upstream := ctx.Query("upstream")
+	if len(upstream) != 0 {
+		GetMirrorsByUpstream(ctx, upstream)
+		return
+	}
 	mirrors, err := mirror.GetAllMirrors()
 	if err != nil {
 		log.Errorf("Get all mirrors found error:%#v", err)
@@ -22,8 +27,7 @@ func GetAllMirrors(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, utils.ResponseHelper(utils.SetData("mirrors", mirrors)))
 }
 
-func GetMirrorsByUpstream(c *gin.Context) {
-	upstream := c.Param("upstream")
+func GetMirrorsByUpstream(c *gin.Context, upstream string) {
 	mirrors, err := mirror.GetMirrorsByUpstream(upstream)
 	if err != nil {
 		log.Errorf("Get mirrors by upstream:%s found error:%v", upstream, err)
@@ -66,7 +70,7 @@ func Login(c *gin.Context) {
 		return
 	}
 	sessionId := uuid.FromTime(time.Now()).String()
-	_ = redis.Set(loginReq.Username + "-session-id", sessionId, time.Hour* 12)
+	_ = redis.Set(loginReq.Username + "-session-id", sessionId, time.Hour * 1)
 	c.SetCookie("username", loginReq.Username, 3600, "/", "", false, false)
 	c.SetCookie("sessionId", sessionId, 3600, "/", "", false, false)
 	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SuccessResp()))
