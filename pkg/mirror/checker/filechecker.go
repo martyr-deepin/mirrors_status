@@ -198,7 +198,7 @@ func CheckFile(urlPrefix string, filePath string, allowRetry bool,
 	}
 
 	url0 := urlPrefix + filePath
-	log.Infof("Ckeck file for:%s", url0)
+	log.Infof("Check file for:%s", url0)
 	req, err := http.NewRequest(http.MethodGet, url0, nil)
 	if err != nil {
 		log.Errorf("Check file found error:%v", err)
