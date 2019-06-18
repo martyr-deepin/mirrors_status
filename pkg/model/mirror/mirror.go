@@ -159,6 +159,25 @@ func GetAllMirrors() (mirrors []Mirror, err error) {
 	return
 }
 
+func GetPagedMirrors(page, size int) (mirrors []Mirror, err error) {
+	list := []Mirror{}
+	if page <= 0 || size <= 0 {
+		return nil, errors.New("pagination error")
+	}
+	err = mysql.NewMySQLClient().Table("mirrors").Limit(size).Offset((page - 1) * size).Scan(&list).Error
+	for _, mirror := range list {
+		_ = mirror.GetMirrorCompletion()
+		_ = mirror.GetMirrorCdnCompletion()
+		mirrors = append(mirrors, mirror)
+	}
+	return
+}
+
+func GetMirrorsCount() (count int, err error) {
+	err = mysql.NewMySQLClient().Table("mirrors").Count(&count).Error
+	return
+}
+
 func GetMirrorUpstreams() (upstreamList configs.RepositoryInfoList) {
 	jenkinsConfig := configs.NewJenkinsConfig()
 	upstreamList = jenkinsConfig.Repositories
@@ -212,6 +231,7 @@ func influxData2Map(data [][][]interface{}) (map[string]float64, error) {
 func (m *Mirror) GetMirrorCompletion() (err error) {
 	if m.UrlHttps != "" {
 		data, err := influxdb.LatestMirrorData("mirrors", "progress", "", map[string]interface{}{"name": m.UrlHttps}, "")
+		log.Infof("HTTPS info:%v", data)
 		if err != nil {
 			return err
 		}
@@ -225,6 +245,7 @@ func (m *Mirror) GetMirrorCompletion() (err error) {
 	}
 	if m.UrlHttp != "" {
 		data, err := influxdb.LatestMirrorData("mirrors", "progress", "", map[string]interface{}{"name": m.UrlHttp}, "")
+		log.Infof("HTTP info:%v", data)
 		if err != nil {
 			return err
 		}
@@ -238,6 +259,7 @@ func (m *Mirror) GetMirrorCompletion() (err error) {
 	}
 	if m.UrlFtp != "" {
 		data, err := influxdb.LatestMirrorData("mirrors", "progress", "", map[string]interface{}{"name": m.UrlFtp}, "")
+		log.Infof("FTP info:%v", data)
 		if err != nil {
 			return err
 		}
@@ -251,6 +273,7 @@ func (m *Mirror) GetMirrorCompletion() (err error) {
 	}
 	if m.UrlRsync != "" {
 		data, err := influxdb.LatestMirrorData("mirrors", "progress", "", map[string]interface{}{"name": m.UrlRsync}, "")
+		log.Infof("RSYNC info:%v", data)
 		if err != nil {
 			return err
 		}

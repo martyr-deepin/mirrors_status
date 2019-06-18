@@ -9,6 +9,7 @@ import (
 	"mirrors_status/pkg/model/mirror"
 	"mirrors_status/pkg/utils"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -18,10 +19,26 @@ func GetAllMirrors(ctx *gin.Context) {
 		GetMirrorsByUpstream(ctx, upstream)
 		return
 	}
+	page := ctx.Query("page")
+	limit := ctx.Query("limit")
+	if len(page) != 0 && len(limit) != 0 {
+		mirrorPage, err1 := strconv.Atoi(page)
+		mirrorLimit, err2 := strconv.Atoi(limit)
+		if err1 != nil || err2 != nil {
+			ctx.JSON(http.StatusBadRequest, utils.ErrorHelper(nil, utils.PARAMETER_ERROR))
+			return
+		}
+		if mirrorPage == 0 {
+			GetMirrorsCount(ctx)
+			return
+		}
+		GetPagedMirrors(ctx, mirrorPage, mirrorLimit)
+		return
+	}
 	mirrors, err := mirror.GetAllMirrors()
 	if err != nil {
 		log.Errorf("Get all mirrors found error:%#v", err)
-		ctx.JSON(http.StatusNoContent, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
+		ctx.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
 		return
 	}
 	ctx.JSON(http.StatusOK, utils.ResponseHelper(utils.SetData("mirrors", mirrors)))
@@ -31,6 +48,26 @@ func GetMirrorsByUpstream(c *gin.Context, upstream string) {
 	mirrors, err := mirror.GetMirrorsByUpstream(upstream)
 	if err != nil {
 		log.Errorf("Get mirrors by upstream:%s found error:%v", upstream, err)
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
+		return
+	}
+	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SetData("mirrors", mirrors)))
+}
+
+func GetMirrorsCount(c *gin.Context) {
+	count, err := mirror.GetMirrorsCount()
+	if err != nil {
+		log.Errorf("Get mirror page count found error:%#v", err)
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
+		return
+	}
+	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SetData("count", count)))
+}
+
+func GetPagedMirrors(c *gin.Context, page, size int) {
+	mirrors, err := mirror.GetPagedMirrors(page, size)
+	if err != nil {
+		log.Errorf("Get paged mirrors found error:%#v", err)
 		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
 		return
 	}
