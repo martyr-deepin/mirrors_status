@@ -2,6 +2,7 @@ package archive
 
 import (
 	"encoding/json"
+	"errors"
 	"mirrors_status/internal/log"
 	"mirrors_status/pkg/db/mysql"
 	"mirrors_status/pkg/model/mirror"
@@ -77,6 +78,27 @@ func GetAllArchives() (archives []Archive, err error) {
 	if err != nil {
 		return nil, err
 	}
+	for _, a := range list {
+		archive, err := GetArchiveByTaskId(a.TaskId)
+		if err != nil {
+			return nil, err
+		}
+		archives = append(archives, archive)
+	}
+	return archives, nil
+}
+
+func GetArchivesCount() (count int, err error) {
+	err = mysql.NewMySQLClient().Table("archives").Count(&count).Error
+	return
+}
+
+func GetPagedArchives(page, size int) (archives []Archive, err error) {
+	list := []Archive{}
+	if page <= 0 || size <= 0 {
+		return nil, errors.New("pagination error")
+	}
+	err = mysql.NewMySQLClient().Table("archives").Limit(size).Offset((page - 1) * size).Scan(&list).Error
 	for _, a := range list {
 		archive, err := GetArchiveByTaskId(a.TaskId)
 		if err != nil {

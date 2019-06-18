@@ -316,7 +316,43 @@ func GetArchiveByTaskId(c *gin.Context) {
 }
 
 func GetAllArchives(c *gin.Context) {
+	page := c.Query("page")
+	limit := c.Query("limit")
+	if len(page) != 0 && len(limit) != 0 {
+		archivePage, err1 := strconv.Atoi(page)
+		archiveLimit, err2 := strconv.Atoi(limit)
+		if err1 != nil || err2 != nil {
+			c.JSON(http.StatusBadRequest, utils.ErrorHelper(nil, utils.PARAMETER_ERROR))
+			return
+		}
+		if archivePage == 0 {
+			GetArchivesCount(c)
+			return
+		}
+		GetPagedMirrors(c, archivePage, archiveLimit)
+		return
+	}
 	archives, err := archive.GetAllArchives()
+	if err != nil {
+		log.Errorf("Get archives found error:%#v", err)
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
+		return
+	}
+	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SetData("archives", archives)))
+}
+
+func GetArchivesCount(c *gin.Context) {
+	count, err := archive.GetArchivesCount()
+	if err != nil {
+		log.Errorf("Get archive page count found error:%#v", err)
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
+		return
+	}
+	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SetData("count", count)))
+}
+
+func GetPagedArchives(c *gin.Context, page, size int) {
+	archives, err := archive.GetPagedArchives(page, size)
 	if err != nil {
 		log.Errorf("Get archives found error:%#v", err)
 		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
