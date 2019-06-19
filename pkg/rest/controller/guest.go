@@ -15,24 +15,28 @@ import (
 
 func GetAllMirrors(ctx *gin.Context) {
 	upstream := ctx.Query("upstream")
-	if len(upstream) != 0 {
-		GetMirrorsByUpstream(ctx, upstream)
-		return
-	}
 	page := ctx.Query("page")
 	limit := ctx.Query("limit")
-	if len(page) != 0 && len(limit) != 0 {
-		mirrorPage, err1 := strconv.Atoi(page)
-		mirrorLimit, err2 := strconv.Atoi(limit)
-		if err1 != nil || err2 != nil {
-			ctx.JSON(http.StatusBadRequest, utils.ErrorHelper(nil, utils.PARAMETER_ERROR))
-			return
-		}
-		if mirrorPage == 0 {
-			GetMirrorsCount(ctx)
-			return
-		}
+	if len(upstream) == 0 && len(page) == 0 && len(limit) == 0 {
+		GetMirrorsCount(ctx)
+		return
+	}
+	if len(upstream) != 0 && len(page) == 0 && len(limit) == 0 {
+		GetMirrorsCountByUpstream(ctx, upstream)
+		return
+	}
+	mirrorPage, err1 := strconv.Atoi(page)
+	mirrorLimit, err2 := strconv.Atoi(limit)
+	if err1 != nil || err2 != nil {
+		ctx.JSON(http.StatusBadRequest, utils.ErrorHelper(nil, utils.PARAMETER_ERROR))
+		return
+	}
+	if len(upstream) == 0 && len(page) != 0 && len(limit) != 0 {
 		GetPagedMirrors(ctx, mirrorPage, mirrorLimit)
+		return
+	}
+	if len(upstream) != 0 && len(page) != 0 && len(limit) != 0 {
+		GetPagedMirrorsByUpstream(ctx, upstream, mirrorPage, mirrorLimit)
 		return
 	}
 	mirrors, err := mirror.GetAllMirrors()
@@ -54,10 +58,30 @@ func GetMirrorsByUpstream(c *gin.Context, upstream string) {
 	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SetData("mirrors", mirrors)))
 }
 
+func GetPagedMirrorsByUpstream(c *gin.Context, upstream string, page, size int) {
+	mirrors, err := mirror.GetPagedMirrorsByUpstream(upstream, page, size)
+	if err != nil {
+		log.Errorf("Get paged mirrors by upstream:%s found error:%v", upstream, err)
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
+		return
+	}
+	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SetData("mirrors", mirrors)))
+}
+
 func GetMirrorsCount(c *gin.Context) {
 	count, err := mirror.GetMirrorsCount()
 	if err != nil {
-		log.Errorf("Get mirror page count found error:%#v", err)
+		log.Errorf("Get mirrors count found error:%#v", err)
+		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
+		return
+	}
+	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SetData("count", count)))
+}
+
+func GetMirrorsCountByUpstream(c *gin.Context, upstream string) {
+	count, err := mirror.GetMirrorsCountByUpstream(upstream)
+	if err != nil {
+		log.Errorf("Get mirrors count by upstream found error:%#v", err)
 		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
 		return
 	}

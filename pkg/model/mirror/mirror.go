@@ -178,6 +178,25 @@ func GetMirrorsCount() (count int, err error) {
 	return
 }
 
+func GetMirrorsCountByUpstream(upstream string) (count int, err error) {
+	err = mysql.NewMySQLClient().Table("mirrors").Where("upstream = ?", upstream).Count(&count).Error
+	return
+}
+
+func GetPagedMirrorsByUpstream(upstream string, page, size int) (mirrors []Mirror, err error) {
+	list := []Mirror{}
+	if page <= 0 || size <= 0 {
+		return nil, errors.New("pagination error")
+	}
+	err = mysql.NewMySQLClient().Table("mirrors").Where("upstream = ?", upstream).Limit(size).Offset((page - 1) * size).Scan(&list).Error
+	for _, mirror := range list {
+		_ = mirror.GetMirrorCompletion()
+		_ = mirror.GetMirrorCdnCompletion()
+		mirrors = append(mirrors, mirror)
+	}
+	return
+}
+
 func GetMirrorUpstreams() (upstreamList configs.RepositoryInfoList) {
 	jenkinsConfig := configs.NewJenkinsConfig()
 	upstreamList = jenkinsConfig.Repositories
