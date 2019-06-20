@@ -28,7 +28,7 @@ func GetAllMirrors(ctx *gin.Context) {
 	mirrorPage, err1 := strconv.Atoi(page)
 	mirrorLimit, err2 := strconv.Atoi(limit)
 	if err1 != nil || err2 != nil {
-		ctx.JSON(http.StatusBadRequest, utils.ErrorHelper(nil, utils.PARAMETER_ERROR))
+		ctx.JSON(http.StatusOK, utils.ErrorHelper(nil, utils.PARAMETER_ERROR))
 		return
 	}
 	if len(upstream) == 0 && len(page) != 0 && len(limit) != 0 {
@@ -42,7 +42,7 @@ func GetAllMirrors(ctx *gin.Context) {
 	mirrors, err := mirror.GetAllMirrors()
 	if err != nil {
 		log.Errorf("Get all mirrors found error:%#v", err)
-		ctx.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
+		ctx.JSON(http.StatusOK, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
 		return
 	}
 	ctx.JSON(http.StatusOK, utils.ResponseHelper(utils.SetData("mirrors", mirrors)))
@@ -52,7 +52,7 @@ func GetMirrorsByUpstream(c *gin.Context, upstream string) {
 	mirrors, err := mirror.GetMirrorsByUpstream(upstream)
 	if err != nil {
 		log.Errorf("Get mirrors by upstream:%s found error:%v", upstream, err)
-		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
+		c.JSON(http.StatusOK, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
 		return
 	}
 	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SetData("mirrors", mirrors)))
@@ -62,7 +62,7 @@ func GetPagedMirrorsByUpstream(c *gin.Context, upstream string, page, size int) 
 	mirrors, err := mirror.GetPagedMirrorsByUpstream(upstream, page, size)
 	if err != nil {
 		log.Errorf("Get paged mirrors by upstream:%s found error:%v", upstream, err)
-		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
+		c.JSON(http.StatusOK, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
 		return
 	}
 	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SetData("mirrors", mirrors)))
@@ -72,7 +72,7 @@ func GetMirrorsCount(c *gin.Context) {
 	count, err := mirror.GetMirrorsCount()
 	if err != nil {
 		log.Errorf("Get mirrors count found error:%#v", err)
-		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
+		c.JSON(http.StatusOK, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
 		return
 	}
 	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SetData("count", count)))
@@ -82,7 +82,7 @@ func GetMirrorsCountByUpstream(c *gin.Context, upstream string) {
 	count, err := mirror.GetMirrorsCountByUpstream(upstream)
 	if err != nil {
 		log.Errorf("Get mirrors count by upstream found error:%#v", err)
-		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
+		c.JSON(http.StatusOK, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
 		return
 	}
 	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SetData("count", count)))
@@ -92,7 +92,7 @@ func GetPagedMirrors(c *gin.Context, page, size int) {
 	mirrors, err := mirror.GetPagedMirrors(page, size)
 	if err != nil {
 		log.Errorf("Get paged mirrors found error:%#v", err)
-		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
+		c.JSON(http.StatusOK, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
 		return
 	}
 	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SetData("mirrors", mirrors)))
@@ -117,17 +117,17 @@ func Login(c *gin.Context) {
 	var loginReq LoginReq
 	err := c.BindJSON(&loginReq)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.PARAMETER_ERROR))
+		c.JSON(http.StatusOK, utils.ErrorHelper(err, utils.PARAMETER_ERROR))
 		return
 	}
 	clt, err := ldap.NewLdapClient()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, utils.ErrorHelper(err, utils.INTERNAL_LDAP_ERROR))
+		c.JSON(http.StatusOK, utils.ErrorHelper(err, utils.INTERNAL_LDAP_ERROR))
 		return
 	}
 	err = clt.CheckUserPassword(loginReq.Username, loginReq.Password)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, utils.ErrorHelper(err, utils.LOGIN_FAILED))
+		c.JSON(http.StatusOK, utils.ErrorHelper(err, utils.LOGIN_FAILED))
 		return
 	}
 	sessionId := uuid.FromTime(time.Now()).String()

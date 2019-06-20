@@ -17,12 +17,12 @@ import (
 
 type Task struct {
 	Id                   int                             `gorm:"primary_key" json:"id"`
-	Creator              string                          `gorm:"type:varchar(32)" json:"creator"`
+	Creator              string                          `gorm:"type:varchar(255)" json:"creator"`
 	CreateAt             time.Time                       `gorm:"default:now()" json:"create_at"`
-	Upstream             string                          `gorm:"type:varchar(64)" json:"upstream"`
+	Upstream             string                          `gorm:"type:varchar(255)" json:"upstream"`
 	IsOpen               bool                            `gorm:"default:true" json:"is_open"`
-	ContactMail          string                          `gorm:"type:varchar(64)" json:"contact_mail"`
-	MirrorOperationIndex string                          `gorm:"type:varchar(64)" json:"mirror_operation_index"`
+	ContactMail          string                          `gorm:"type:varchar(255)" json:"contact_mail"`
+	MirrorOperationIndex string                          `gorm:"type:varchar(255)" json:"mirror_operation_index"`
 	MirrorSyncFinished   bool                            `gorm:"default:false" json:"mirror_sync_finished"`
 	Status               constants.MirrorOperationStatus `gorm:"default:0" json:"status"`
 

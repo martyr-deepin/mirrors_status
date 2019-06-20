@@ -87,20 +87,20 @@ type CdnNodeCompletion struct {
 
 type Mirror struct {
 	Mid int    `gorm:"primary_key" json:"index"`
-	Id  string `gorm:"type:varchar(64);unique" json:"id"`
+	Id  string `gorm:"type:varchar(255);unique" json:"id"`
 
 	//Type     MirrorType
-	Name     string `gorm:"type:varchar(64)" json:"name"`
-	Upstream string `gorm:"type:varchar(64)" json:"upstream"`
+	Name     string `gorm:"type:varchar(255)" json:"name"`
+	Upstream string `gorm:"type:varchar(255)" json:"upstream"`
 	Weight   int    `gorm:"type:int" json:"weight"`
-	Location string `gorm:"type:varchar(64)" json:"location"`
+	Location string `gorm:"type:varchar(255)" json:"location"`
 	Locale   JSON   `sql:"type:json" json:"locale,omitempty"`
 	//LocaleBody ExtField `sql:"-"`
 
-	UrlHttps string `gorm:"type:varchar(64)" json:"url_https"`
-	UrlHttp  string `gorm:"type:varchar(64)" json:"url_http"`
-	UrlFtp   string `gorm:"type:varchar(64)" json:"url_ftp"`
-	UrlRsync string `gorm:"type:varchar(64)" json:"url_rsync"`
+	UrlHttps string `gorm:"type:varchar(255)" json:"url_https"`
+	UrlHttp  string `gorm:"type:varchar(255)" json:"url_http"`
+	UrlFtp   string `gorm:"type:varchar(255)" json:"url_ftp"`
+	UrlRsync string `gorm:"type:varchar(255)" json:"url_rsync"`
 
 	HttpsProgress float64 `sql:"-" json:"https_progress,omitempty"`
 	HttpProgress  float64 `sql:"-" json:"http_progress,omitempty"`
@@ -108,7 +108,7 @@ type Mirror struct {
 	RsyncProgress float64 `sql:"-" json:"rsync_progress,omitempty"`
 	CdnCompletion []CdnNodeCompletion `sql:"-" json:"cdn_completion,omitempty"`
 
-	Tags  string `gorm:"type:varchar(64)" json:"tags"`
+	Tags  string `gorm:"type:varchar(255)" json:"tags"`
 	Extra JSON   `sql:"type:json" json:"extra,omitempty"`
 	//ExtraBody ExtField `sql:"-"`
 	IsKey bool `gorm:"default:0" json:"is_key"`
