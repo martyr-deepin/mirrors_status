@@ -45,10 +45,13 @@ func GetArchiveByTaskId(id int) (archive Archive, err error) {
 		return Archive{}, err
 	}
 	return Archive{
+		Id: archive.Id,
+		TaskId: archive.TaskId,
 		MirrorSnapshot: archive.MirrorSnapshot,
 		TaskSnapshot:   t,
 		OperationSnapshot: op,
 		CITaskSnapshot: ciTasks,
+		CreateAt: archive.CreateAt,
 	}, nil
 }
 
