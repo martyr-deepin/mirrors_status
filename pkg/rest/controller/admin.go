@@ -318,6 +318,10 @@ func GetArchiveByTaskId(c *gin.Context) {
 func GetAllArchives(c *gin.Context) {
 	page := c.Query("page")
 	limit := c.Query("limit")
+	if len(page) == 0 && len(limit) == 0 {
+		GetArchivesCount(c)
+		return
+	}
 	if len(page) != 0 && len(limit) != 0 {
 		archivePage, err1 := strconv.Atoi(page)
 		archiveLimit, err2 := strconv.Atoi(limit)
@@ -325,11 +329,7 @@ func GetAllArchives(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, utils.ErrorHelper(nil, utils.PARAMETER_ERROR))
 			return
 		}
-		if archivePage == 0 {
-			GetArchivesCount(c)
-			return
-		}
-		GetPagedMirrors(c, archivePage, archiveLimit)
+		GetPagedArchives(c, archivePage, archiveLimit)
 		return
 	}
 	archives, err := archive.GetAllArchives()

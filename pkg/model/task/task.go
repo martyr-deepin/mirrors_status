@@ -112,6 +112,19 @@ func GetOpenTasks() (tasks []Task, err error) {
 	return
 }
 
+func GetOpenTasksCount() (count int, err error) {
+	err = mysql.NewMySQLClient().Table("tasks").Where("is_open = ?", true).Count(&count).Error
+	return
+}
+
+func GetPagedOpenTasks(page, size int) (tasks []Task, err error) {
+	if page <= 0 || size <= 0 {
+		return nil, errors.New("pagination error")
+	}
+	err = mysql.NewMySQLClient().Table("tasks").Where("is_open = ?", true).Limit(size).Offset((page - 1) * size).Scan(&tasks).Error
+	return
+}
+
 func UpdateCiTaskJenkinsUrl(id int, url string) error {
 	return mysql.NewMySQLClient().Table("ci_tasks").Where("id = ?", id).Update("jenkins_url", url).Error
 }
