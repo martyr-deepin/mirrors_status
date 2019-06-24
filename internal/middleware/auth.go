@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"mirrors_status/pkg/db/redis"
 	"net/http"
+	"time"
 )
 
 func Auth() gin.HandlerFunc {
@@ -27,6 +28,7 @@ func Auth() gin.HandlerFunc {
 			return
 		}
 		if session_id == redisSession {
+			_ = redis.Set(username + "-session-id", session_id, time.Hour * 1)
 			c.Next()
 			return
 		}

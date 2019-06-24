@@ -72,6 +72,10 @@ func CloseTask(id int) error {
 	return mysql.NewMySQLClient().Table("tasks").Where("id = ?", id).Update("is_open", false).Error
 }
 
+func AbortTask(id int) error {
+	return mysql.NewMySQLClient().Table("tasks").Where("id = ?", id).Update("is_open", false).Update("status", constants.STATUS_ABORTED).Error
+}
+
 func UpdateMirrorOperationIndex(id int, index string) error {
 	return mysql.NewMySQLClient().Table("tasks").Where("id = ?", id).Update("mirror_operation_index", index).Error
 }
@@ -143,7 +147,7 @@ func UpdateTaskStatus(id int, status constants.MirrorOperationStatus) error {
 
 func (t Task) Handle(delTask func(string)) {
 	log.Infof("Starting executing task:[%#v]", t)
-	if t.Status == constants.STATUS_FAILURE || t.Status == constants.STATUS_FINISHED {
+	if t.Status == constants.STATUS_ABORTED || t.Status == constants.STATUS_FAILURE || t.Status == constants.STATUS_FINISHED {
 		delTask(t.Upstream)
 		return
 	}

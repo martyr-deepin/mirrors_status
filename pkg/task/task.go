@@ -3,6 +3,7 @@ package task
 import (
 	"errors"
 	"mirrors_status/internal/log"
+	"mirrors_status/pkg/model/constants"
 	"mirrors_status/pkg/model/task"
 	"sync"
 )
@@ -31,7 +32,9 @@ func (t *TaskManager) Init() {
 	t.Tasks = make(map[string]*task.Task)
 	for _, task := range openTasks {
 		t.Locker.Lock()
-		t.Tasks[task.Upstream] = &task
+		if task.Status != constants.STATUS_ABORTED {
+			t.Tasks[task.Upstream] = &task
+		}
 		log.Infof("Task:%#v", task)
 		t.Locker.Unlock()
 	}

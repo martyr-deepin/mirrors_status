@@ -92,6 +92,7 @@ func CreateTask(c *gin.Context) {
 		c.JSON(http.StatusOK, utils.ErrorHelper(err, utils.CREATE_TASK_FAILED))
 		return
 	}
+	_ = archive.ArchiveTask(t.Id)
 	var jobs configs.JobInfoList
 	if task.Type == task2.PublishType {
 		jobs = jenkins.GetPublishJobsByUpstream(task.Upstream)
@@ -115,7 +116,6 @@ func CreateTask(c *gin.Context) {
 	go t.Handle(func(upstream string) {
 		log.Infof("Start executing task:[%s]", upstream)
 	})
-	_ = archive.ArchiveTask(t.Id)
 	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SuccessResp()))
 }
 
@@ -260,7 +260,7 @@ func AbortTask(c *gin.Context) {
 		c.JSON(http.StatusOK, utils.ErrorHelper(err, utils.PARAMETER_ERROR))
 		return
 	}
-	err = task2.CloseTask(id)
+	err = task2.AbortTask(id)
 	if err != nil {
 		c.JSON(http.StatusOK, utils.ErrorHelper(err, utils.UPDATE_TASK_STATUS_FAILED))
 		return
