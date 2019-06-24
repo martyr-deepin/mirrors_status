@@ -101,11 +101,15 @@ func GetPagedArchives(page, size int) (archives []Archive, err error) {
 	if page <= 0 || size <= 0 {
 		return nil, errors.New("pagination error")
 	}
-	err = mysql.NewMySQLClient().Table("archives").Limit(size).Offset((page - 1) * size).Scan(&list).Error
+	err = mysql.NewMySQLClient().Table("archives").Limit(size).Offset((page - 1) * size).Order("create_at DESC").Scan(&list).Error
+	if err != nil {
+		log.Errorf("Get paged archives found error:%v", err)
+		return nil, err
+	}
 	for _, a := range list {
 		archive, err := GetArchiveByTaskId(a.TaskId)
 		if err != nil {
-			return nil, err
+			continue
 		}
 		archives = append(archives, archive)
 	}
