@@ -134,6 +134,18 @@ func GetTaskById(c *gin.Context) {
 		return
 	}
 
+	queryCid := c.Query("cid")
+	cid, err := strconv.Atoi(queryCid)
+	if err != nil {
+		log.Errorf("Parse query param id:%d found error:%v", queryCid, err)
+		c.JSON(http.StatusOK, utils.ErrorHelper(err, utils.PARAMETER_ERROR))
+		return
+	}
+	if len(queryCid) != 0 {
+		ReExecuteCiTask(cid, c)
+		return
+	}
+
 	task, err := task2.GetTaskById(id)
 	if err != nil {
 		log.Errorf("Get task by id:[%d] found error:%#v", id, err)
@@ -158,6 +170,12 @@ func GetTaskById(c *gin.Context) {
 		CITasks: ciTasks,
 		MirrorOperation: mirrorOperation,
 	})))
+}
+
+func ReExecuteCiTask(id int, c *gin.Context) {
+	task, _ := task2.GetCiTaskById(id)
+	go task.ReExecute()
+	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SuccessResp()))
 }
 
 type OpenTasksResp []TaskDetailResp
@@ -206,12 +224,13 @@ func CheckAllMirrors(c *gin.Context) {
 }
 
 func CheckMirrorsByUpstream(c *gin.Context) {
-	username, err := c.Cookie("username")
-	if err != nil {
-		c.JSON(http.StatusOK, utils.ErrorHelper(err, utils.PARSE_COOKIE_ERROR))
+	username, _ := c.Cookie("username")
+	upstream := c.Param("upstream")
+	queryIndex := c.Query("index")
+	if len(queryIndex) != 0 {
+		CheckMirrorsByUpstreamWithIndex(upstream, username, queryIndex, c)
 		return
 	}
-	upstream := c.Param("upstream")
 	mirrors, err := mirror2.GetMirrorsByUpstream(upstream)
 	if err != nil {
 		log.Errorf("Get mirrors by upstream:%s found error:%v", upstream, err)
@@ -221,6 +240,15 @@ func CheckMirrorsByUpstream(c *gin.Context) {
 	checker := checker.NewCDNChecker()
 	index := checker.CheckMirrors(mirrors, username)
 	log.Infof("Check all mirror tasks established index:[%s]", index)
+	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SuccessResp()))
+}
+
+func CheckMirrorsByUpstreamWithIndex(upstream, username, index string, c *gin.Context) {
+	_ = operation.SyncMirrorClearRecord(index)
+	err := checker.NewCDNChecker().CheckMirrorsByUpstreamWithIndex(upstream, username, index)
+	if err != nil {
+		log.Errorf("Checker mirrors by upstream:%s with index:%s found error:%v", upstream, index, err)
+	}
 	c.JSON(http.StatusOK, utils.ResponseHelper(utils.SuccessResp()))
 }
 

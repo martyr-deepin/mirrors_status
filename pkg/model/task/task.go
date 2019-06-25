@@ -138,7 +138,10 @@ func UpdateCiTaskResult(id int, result string) error {
 }
 
 func CiTaskRetry(id int) error {
-	return mysql.NewMySQLClient().Table("tasks").Where("id = ?", id).Update("retry", gorm.Expr("retry + ?", 1)).Error
+	return mysql.NewMySQLClient().Table("ci_tasks").Where("id = ?", id).
+		Update("retry", gorm.Expr("retry + ?", 1)).
+		Update("result", "").
+		Update("status", constants.STATUS_WAITING).Error
 }
 
 func UpdateTaskStatus(id int, status constants.MirrorOperationStatus) error {
@@ -174,6 +177,12 @@ func (t Task) Handle(delTask func(string)) {
 		_ = UpdateTaskStatus(t.Id, constants.STATUS_FINISHED)
 		return
 	}
+}
+
+func (c CITask) ReExecute() {
+	_ = CiTaskRetry(c.Id)
+	task, _ := GetTaskById(c.TaskId)
+	c.Handle(task.Id, task.Upstream, task.ContactMail, task.Creator)
 }
 
 func (c CITask) Handle(id int, upstream, contact, creator string) {

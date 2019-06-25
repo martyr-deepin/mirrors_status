@@ -485,7 +485,7 @@ func (checker *CDNChecker) testAllMirrors(mirrors0 mirrors, validateInfoList []*
 	}
 	pool.WaitAll()
 
-	checker.pushAllMirrorsTestResults(testResults)
+	_ = checker.pushAllMirrorsTestResults(testResults)
 }
 
 func (checker *CDNChecker) init(username string, index string) error {
@@ -700,26 +700,27 @@ func (checker *CDNChecker) CheckMirrors(mirrors []mirror.Mirror, username string
 			optMirror = mirror.Id
 			log.Infof("Before init mirror check by upstream")
 			err := checker.init(username, index)
-			if err != nil {
-				log.Infof("Sync mirror found error: %#v", err)
-				if mirror.IsKey {
-					if err != nil {
-						log.Error("Update mirror task msg found error:%#v", err)
-					}
-					err = operation.SyncMirrorFailedOnce(index)
-					if err != nil {
-						log.Error("Sync mirror fail found error:%#v", err)
-					}
-					continue
+			if err != nil && !mirror.IsKey {
+				log.Errorf("Sync mirror:[%s] found error:%v", mirror.Id, err)
+				_ = operation.SyncMirrorFailedOnce(index)
+				break
+			}
+			_ = mirror.GetMirrorCompletion()
+			if mirror.IsKey {
+				if (mirror.HttpProgress < 1 && mirror.UrlHttp != "") ||
+					(mirror.HttpsProgress < 1 && mirror.UrlHttps != "") ||
+					(mirror.FtpProgress < 1 && mirror.UrlFtp != "") ||
+					(mirror.RsyncProgress < 1 && mirror.UrlRsync != "") {
+					_ = operation.SyncMirrorUnfinishOnce(index)
+					_ = operation.UpdateMirrorStatus(index, constants.STATUS_FAILURE, "关键镜像" + mirror.Id + "同步未完成")
+					break
 				}
+
 			}
-			err = operation.SyncMirrorFinishOnce(index)
-			if err != nil {
-				log.Error("Sync mirror finished found error:%#v", err)
-			}
+			_ = operation.SyncMirrorFinishOnce(index)
 		}
 		op, _ := operation.GetOperationByIndex(index)
-		if (op.Total <= op.Failed + op.Finish) && op.Failed <= 0 {
+		if (op.Total <= op.Failed + op.Finish) && op.Failed <= 0 && op.Unfinish <= 0 {
 			err = operation.UpdateMirrorStatus(index, constants.STATUS_FINISHED, "")
 			if err != nil {
 				log.Error("Update mirror operation status found error:%#v", err)
@@ -727,4 +728,49 @@ func (checker *CDNChecker) CheckMirrors(mirrors []mirror.Mirror, username string
 		}
 	}()
 	return index
+}
+
+func (checker *CDNChecker) CheckMirrorsByUpstreamWithIndex(upstream, username, index string) (err error) {
+	mirrors, err := mirror.GetMirrorsByUpstream(upstream)
+	if err != nil {
+		return err
+	}
+	if len(mirrors) <= 0 {
+		_ = operation.UpdateMirrorStatus(index, constants.STATUS_FINISHED, "")
+		_ = operation.SyncMirrorFinishOnce(index)
+		return nil
+	}
+	go func() {
+		for _, mirror := range mirrors {
+			optMirror = mirror.Id
+			log.Infof("Before init mirror check by upstream")
+			err := checker.init(username, index)
+			if err != nil && !mirror.IsKey {
+				log.Errorf("Sync mirror:[%s] found error:%v", mirror.Id, err)
+				_ = operation.SyncMirrorFailedOnce(index)
+				break
+			}
+			_ = mirror.GetMirrorCompletion()
+			if mirror.IsKey {
+				if (mirror.HttpProgress < 1 && mirror.UrlHttp != "") ||
+					(mirror.HttpsProgress < 1 && mirror.UrlHttps != "") ||
+					(mirror.FtpProgress < 1 && mirror.UrlFtp != "") ||
+					(mirror.RsyncProgress < 1 && mirror.UrlRsync != "") {
+					_ = operation.SyncMirrorUnfinishOnce(index)
+					_ = operation.UpdateMirrorStatus(index, constants.STATUS_FAILURE, "关键镜像" + mirror.Id + " 同步未完成")
+					break
+				}
+
+			}
+			_ = operation.SyncMirrorFinishOnce(index)
+		}
+		op, _ := operation.GetOperationByIndex(index)
+		if (op.Total <= op.Failed + op.Finish) && op.Failed <= 0 && op.Unfinish <= 0 {
+			err = operation.UpdateMirrorStatus(index, constants.STATUS_FINISHED, "")
+			if err != nil {
+				log.Error("Update mirror operation status found error:%#v", err)
+			}
+		}
+	}()
+	return nil
 }
