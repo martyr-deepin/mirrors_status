@@ -1,10 +1,11 @@
 package middleware
 
 import (
+	"errors"
 	"github.com/gin-gonic/gin"
 	"mirrors_status/pkg/db/redis"
+	"mirrors_status/pkg/utils"
 	"net/http"
-	"time"
 )
 
 func Auth() gin.HandlerFunc {
@@ -12,29 +13,27 @@ func Auth() gin.HandlerFunc {
 		username, err := c.Cookie("username")
 		if err != nil {
 			c.Abort()
-			c.String(http.StatusUnauthorized, "username cookie expired")
+			c.JSON(http.StatusOK, utils.ErrorHelper(errors.New("parse cookie username error"), utils.GET_COOKIE_ERROR))
 			return
 		}
 		session_id, err := c.Cookie("sessionId")
 		if err != nil {
 			c.Abort()
-			c.String(http.StatusUnauthorized, "cookie sessionId expired")
+			c.JSON(http.StatusOK, utils.ErrorHelper(errors.New("parse cookie session id error"), utils.GET_COOKIE_ERROR))
 			return
 		}
 		redisSession, err := redis.Get(username + "-session-id")
 		if err != nil {
 			c.Abort()
-			c.String(http.StatusUnauthorized, "cookie sessionId illegal")
+			c.JSON(http.StatusOK, utils.ErrorHelper(errors.New("illegal session"), utils.GET_COOKIE_ERROR))
 			return
 		}
 		if session_id == redisSession {
-			_ = redis.Set(username + "-session-id", session_id, time.Hour * 1)
+			//_ = redis.Set(username + "-session-id", session_id, time.Hour * 1)
 			c.Next()
 			return
 		}
 		c.Abort()
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"message": "Set cookie failed",
-		})
+		c.JSON(http.StatusOK, utils.ErrorHelper(errors.New("session expired"), utils.GET_COOKIE_ERROR))
 	}
 }

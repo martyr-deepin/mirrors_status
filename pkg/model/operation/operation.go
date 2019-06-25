@@ -8,19 +8,20 @@ import (
 )
 
 type MirrorOperation struct {
-	Id            int                        `gorm:"primary_key" json:"id"`
-	Index         string                     `json:"index"`
-	CreateDate    time.Time                  `json:"create_date"`
-	Username      string                     `json:"username"`
-	OperationType string                     `json:"operation_type"`
-	MirrorId      string                     `json:"mirror_id"`
+	Id            int                             `gorm:"primary_key" json:"id"`
+	Index         string                          `json:"index"`
+	CreateDate    time.Time                       `json:"create_date"`
+	Username      string                          `json:"username"`
+	OperationType string                          `json:"operation_type"`
+	MirrorId      string                          `json:"mirror_id"`
 	Status        constants.MirrorOperationStatus `json:"status"`
-	Msg           string                     `json:"msg"`
-	
-	Failed int `json:"failed"`
-	Finish int `json:"finish"`
-	Total int `json:"total"`
-	Retry int `json:"retry"`
+	Msg           string                          `json:"msg"`
+
+	Failed   int `json:"failed"`
+	Finish   int `json:"finish"`
+	Unfinish int `json:"unfinish"`
+	Total    int `json:"total"`
+	Retry    int `json:"retry"`
 }
 
 func (m MirrorOperation) CreateMirrorOperation() error {
@@ -62,6 +63,22 @@ func SyncMirrorFinishOnce(index string) (err error) {
 
 func SyncMirrorFailedOnce(index string) (err error) {
 	err = mysql.NewMySQLClient().Table("mirror_operations").Where("`index` = ?", index).Update("failed", gorm.Expr("failed + ?", 1)).Error
+	return
+}
+
+func SyncMirrorUnfinishOnce(index string) (err error) {
+	err = mysql.NewMySQLClient().Table("mirror_operations").Where("`index` = ?", index).Update("unfinish", gorm.Expr("unfinish + ?", 1)).Error
+	return
+}
+
+func SyncMirrorClearRecord(index string) (err error) {
+	err = mysql.NewMySQLClient().Table("mirror_operations").Where("`index` = ?", index).
+		Update("retry", gorm.Expr("retry + ?", 1)).
+		Update("status", constants.STATUS_WAITING).
+		Update("failed", 0).
+		Update("finish", 0).
+		Update("unfinish", 0).
+		Update("msg", "").Error
 	return
 }
 
