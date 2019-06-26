@@ -470,15 +470,30 @@ func (checker *CDNChecker) testAllMirrors(mirrors0 mirrors, validateInfoList []*
 		mirrorCopy := mirror
 		pool.JobQueue <- func() {
 			t1 := time.Now()
-			testResult := checker.testMirror(mirrorCopy.Id, mirrorCopy.GetUrlPrefix(),
-				mirrorCopy.Weight, validateInfoList)
+			results := []*TestResult{}
+			if mirror.UrlHttps != "" {
+				results = append(results, checker.testMirror(mirrorCopy.Id, fmt.Sprintf("https://%s", mirror.UrlHttps),
+					mirrorCopy.Weight, validateInfoList)...)
+			}
+			if mirror.UrlHttp != "" {
+				results = append(results, checker.testMirror(mirrorCopy.Id, fmt.Sprintf("http://%s", mirror.UrlHttp),
+					mirrorCopy.Weight, validateInfoList)...)
+			}
+			//if mirror.UrlFtp != "" {
+			//	results = append(results, checker.testMirror(mirrorCopy.Id, fmt.Sprintf("ftp://%s", mirror.UrlFtp),
+			//		mirrorCopy.Weight, validateInfoList)...)
+			//}
+			//if mirror.UrlRsync != "" {
+			//	results = append(results, checker.testMirror(mirrorCopy.Id, fmt.Sprintf("rsync://%s", mirror.UrlRsync),
+			//		mirrorCopy.Weight, validateInfoList)...)
+			//}
 			TestMirrorFinish()
 			duration0 := time.Since(t0)
 			duration1 := time.Since(t1)
 
 			log.Infof("%s test finished for mirror:%q. Duration:%v, Since:%v", GetMirrorsTestProgressDesc(), mirrorCopy.Id, duration1, duration0)
 			mu.Lock()
-			testResults = append(testResults, testResult...)
+			testResults = append(testResults, results...)
 			mu.Unlock()
 			pool.JobDone()
 		}
@@ -611,7 +626,24 @@ func (checker *CDNChecker) init(username string, index string) error {
 		if err != nil {
 			log.Error("Update mirror operation status found error:%#v", err)
 		}
-		checker.testMirror(mirror0.Id, mirror0.GetUrlPrefix(), mirror0.Weight, validateInfoList)
+		results := []*TestResult{}
+		if mirror0.UrlHttps != "" {
+			results = append(results, checker.testMirror(mirror0.Id, fmt.Sprintf("https://%s", mirror0.UrlHttps),
+				mirror0.Weight, validateInfoList)...)
+		}
+		if mirror0.UrlHttp != "" {
+			results = append(results, checker.testMirror(mirror0.Id, fmt.Sprintf("http://%s", mirror0.UrlHttp),
+				mirror0.Weight, validateInfoList)...)
+		}
+		//if mirror0.UrlFtp != "" {
+		//	results = append(results, checker.testMirror(mirror0.Id, fmt.Sprintf("ftp://%s", mirror0.UrlFtp),
+		//		mirror0.Weight, validateInfoList)...)
+		//}
+		//if mirror0.UrlRsync != "" {
+		//	results = append(results, checker.testMirror(mirror0.Id, fmt.Sprintf("rsync://%s", mirror0.UrlRsync),
+		//		mirror0.Weight, validateInfoList)...)
+		//}
+		_ = checker.pushAllMirrorsTestResults(results)
 	}
 	return nil
 }

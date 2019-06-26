@@ -24,7 +24,7 @@ func InitAdminController(engine *gin.Engine) {
 	r.PUT("/mirrors", controller.UpdateMirror)
 	r.POST("/tasks", controller.CreateTask)
 	r.GET("/tasks/:id", controller.GetTaskById)
-	r.GET("/tasks", controller.GetIOpenTasks)
+	r.GET("/tasks", controller.GetOpenTasks)
 	r.GET("/check", controller.CheckAllMirrors)
 	r.GET("/check/:upstream", controller.CheckMirrorsByUpstream)
 	r.POST("/check", controller.CheckMirrors)

@@ -123,7 +123,7 @@ func DeleteMirror(index int) error {
 }
 
 func (m Mirror) UpdateMirror() error {
-	return mysql.NewMySQLClient().Table("mirrors").Where("mid = ?", m.Mid).Updates(&m, true).Error
+	return mysql.NewMySQLClient().Table("mirrors").Where("mid = ?", m.Mid).Save(&m).Error
 }
 
 func GetMirrorsByUpstream(upstream string) (mirrors []Mirror, err error) {
@@ -249,7 +249,7 @@ func influxData2Map(data [][][]interface{}) (map[string]float64, error) {
 
 func (m *Mirror) GetMirrorCompletion() (err error) {
 	if m.UrlHttps != "" {
-		data, err := influxdb.LatestMirrorData("mirrors", "progress", "", map[string]interface{}{"name": m.UrlHttps}, "")
+		data, err := influxdb.LatestMirrorData("mirrors", "progress", "", map[string]interface{}{"name": "https://" + m.UrlHttps}, "")
 		log.Infof("HTTPS info:%v", data)
 		if err != nil {
 			return err
@@ -263,7 +263,7 @@ func (m *Mirror) GetMirrorCompletion() (err error) {
 		}
 	}
 	if m.UrlHttp != "" {
-		data, err := influxdb.LatestMirrorData("mirrors", "progress", "", map[string]interface{}{"name": m.UrlHttp}, "")
+		data, err := influxdb.LatestMirrorData("mirrors", "progress", "", map[string]interface{}{"name": "http://" + m.UrlHttp}, "")
 		log.Infof("HTTP info:%v", data)
 		if err != nil {
 			return err
@@ -277,7 +277,7 @@ func (m *Mirror) GetMirrorCompletion() (err error) {
 		}
 	}
 	if m.UrlFtp != "" {
-		data, err := influxdb.LatestMirrorData("mirrors", "progress", "", map[string]interface{}{"name": m.UrlFtp}, "")
+		data, err := influxdb.LatestMirrorData("mirrors", "progress", "", map[string]interface{}{"name": "ftp://" + m.UrlFtp}, "")
 		log.Infof("FTP info:%v", data)
 		if err != nil {
 			return err
@@ -291,7 +291,7 @@ func (m *Mirror) GetMirrorCompletion() (err error) {
 		}
 	}
 	if m.UrlRsync != "" {
-		data, err := influxdb.LatestMirrorData("mirrors", "progress", "", map[string]interface{}{"name": m.UrlRsync}, "")
+		data, err := influxdb.LatestMirrorData("mirrors", "progress", "", map[string]interface{}{"name": "rsync://" + m.UrlRsync}, "")
 		log.Infof("RSYNC info:%v", data)
 		if err != nil {
 			return err
