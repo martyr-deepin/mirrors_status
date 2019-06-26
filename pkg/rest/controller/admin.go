@@ -180,7 +180,7 @@ func ReExecuteCiTask(id int, c *gin.Context) {
 
 type OpenTasksResp []TaskDetailResp
 
-func GetIOpenTasks(c *gin.Context) {
+func GetOpenTasks(c *gin.Context) {
 	var openTasks OpenTasksResp
 	tasks, err := task2.GetOpenTasks()
 	if err != nil {
@@ -194,6 +194,7 @@ func GetIOpenTasks(c *gin.Context) {
 			mirrorOperation, err = operation.GetOperationByIndex(task.MirrorOperationIndex)
 		}
 		ciTasks, err := task2.GetCiTasksById(task.Id)
+		realCiTasks := []task2.CITask{}
 		if err != nil {
 			log.Errorf("Get ci tasks by id:[%d] found error:%#v", task.Id, err)
 			c.JSON(http.StatusOK, utils.ErrorHelper(err, utils.FETCH_DATA_ERROR))
@@ -201,10 +202,11 @@ func GetIOpenTasks(c *gin.Context) {
 		}
 		for _, ciTask := range ciTasks {
 			ciTask.Token = ""
+			realCiTasks = append(realCiTasks, ciTask)
 		}
 		openTasks = append(openTasks, TaskDetailResp{
 			Task: task,
-			CITasks: ciTasks,
+			CITasks: realCiTasks,
 			MirrorOperation: mirrorOperation,
 		})
 	}

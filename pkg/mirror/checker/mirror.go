@@ -14,16 +14,6 @@ type UnpublishedMirrors struct {
 	Mirrors mirrors `json:"mirrors"`
 }
 
-func (m *Mirror) GetUrlPrefix() (result string) {
-	if m.UrlHttp != "" {
-		result = "http://" + m.UrlHttp
-	}
-	if m.UrlHttps != "" {
-		result = "https://" + m.UrlHttps
-	}
-	return
-}
-
 func (v mirrors) Len() int {
 	return len(v)
 }

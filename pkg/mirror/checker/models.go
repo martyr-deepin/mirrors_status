@@ -20,6 +20,7 @@ type Mirror struct {
 	UrlHttp    string                       `json:"urlHttp"`
 	UrlHttps   string                       `json:"urlHttps"`
 	UrlFtp     string                       `json:"urlFtp"`
+	UrlRsync   string                       `json:"url_rsync"`
 	Country    string                       `json:"country"`
 	Locale     map[string]map[string]string `json:"locale"`
 	SyncStatus string                       `json:"sync_status"`
