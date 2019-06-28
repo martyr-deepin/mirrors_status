@@ -738,6 +738,7 @@ func (checker *CDNChecker) CheckMirrors(mirrors []mirror.Mirror, username string
 				break
 			}
 			_ = mirror.GetMirrorCompletion()
+			_ = mirror.GetMirrorCdnCompletion()
 			if mirror.IsKey {
 				if (mirror.HttpProgress < 1 && mirror.UrlHttp != "") ||
 					(mirror.HttpsProgress < 1 && mirror.UrlHttps != "") ||
@@ -746,6 +747,13 @@ func (checker *CDNChecker) CheckMirrors(mirrors []mirror.Mirror, username string
 					_ = operation.SyncMirrorUnfinishOnce(index)
 					_ = operation.UpdateMirrorStatus(index, constants.STATUS_FAILURE, "关键镜像" + mirror.Id + "同步未完成")
 					break
+				}
+				for _, comp := range mirror.CdnCompletion {
+					if comp.Completion < 1 {
+						_ = operation.SyncMirrorUnfinishOnce(index)
+						_ = operation.UpdateMirrorStatus(index, constants.STATUS_FAILURE, "关键镜像站" + mirror.Id + "的CDN同步未完成")
+						break
+					}
 				}
 
 			}
