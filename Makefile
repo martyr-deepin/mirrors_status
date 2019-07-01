@@ -1,5 +1,5 @@
 PROGRAM=mirrors_status
-DOCKER_TARGET=hub.deepin.io/mirror_management/mirrors_status
+DOCKER_TARGET=hub.deepin.com/mirror_management/mirrors_status
 DOCKER_BUILD_TARGET=${DOCKER_TARGET}.builder
 
 build: 

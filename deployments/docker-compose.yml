@@ -5,7 +5,7 @@ networks:
 
 services:
   api:
-    image: 'hub.deepin.io/mirror_management/mirrors_status:latest'
+    image: 'hub.deepin.com/mirror_management/mirrors_status:latest'
     ports:
       - '18908:8080'
     restart: always

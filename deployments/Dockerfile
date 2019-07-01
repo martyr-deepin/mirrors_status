@@ -1,5 +1,6 @@
 FROM golang:1.12.5-stretch AS builder
 
+RUN echo "deb http://mirrors.163.com/debian stretch main non-free contrib" > /etc/apt/sources.list
 RUN apt-get update
 RUN apt-get install make
 RUN apt-get install git
@@ -17,6 +18,7 @@ RUN make
 
 FROM golang:1.12.5-stretch
 
+RUN echo "deb http://mirrors.163.com/debian stretch main non-free contrib" > /etc/apt/sources.list
 RUN apt-get update
 RUN apt-get install ca-certificates
 RUN apt-get clean
