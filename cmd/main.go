@@ -38,10 +38,20 @@ func Init() {
 func main() {
 	Init()
 	r := gin.Default()
-	corsConfig := cors.DefaultConfig()
-	corsConfig.AllowOrigins = configs.NewServerConfig().Http.AllowOrigin
-	corsConfig.AllowCredentials = true
-	r.Use(cors.New(corsConfig))
+
+	if configs.NewServerConfig().Http.AllowOrigin != nil {
+		corsConfig := cors.DefaultConfig()
+		corsConfig.AllowOrigins = configs.NewServerConfig().Http.AllowOrigin
+		corsConfig.AllowCredentials = true
+		r.Use(cors.New(corsConfig))
+	} else {
+		r.Use(cors.New(cors.Config{
+			AllowAllOrigins: true,
+			AllowHeaders: []string{"Authorization", "Content-Length", "X-CSRF-Token", "Accept", "Origin", "Host", "Connection", "Accept-Encoding", "Accept-Language,DNT", "X-CustomHeader", "Keep-Alive", "User-Agent", "X-Requested-With", "If-Modified-Since", "Cache-Control", "Content-Type", "Pragma", "Timestamp", "timestamp"},
+			AllowMethods: []string{"POST", "GET", "OPTIONS", "PUT", "DELETE", "PATCH"},
+			ExposeHeaders: []string{"Content-Length", "Access-Control-Allow-Origin", "Access-Control-Allow-Headers", "Content-Type"},
+		}))
+	}
 
 	rest.InitGuestController(r)
 	rest.InitAdminController(r)
