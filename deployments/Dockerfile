@@ -1,9 +1,11 @@
-FROM golang:1.11.8-alpine3.8 AS builder
+FROM golang:1.12.5-stretch AS builder
 
-RUN apk add --update make
-RUN apk add git
-RUN apk add gcc libc-dev
-RUN rm -rf /var/cache/apk/*
+RUN echo "deb http://mirrors.163.com/debian stretch main non-free contrib" > /etc/apt/sources.list
+RUN apt-get update
+RUN apt-get install make
+RUN apt-get install git
+RUN apt-get install gcc libc-dev
+RUN apt-get clean
 
 ENV GOPATH=/opt/gopath
 ENV PROJECT_PATH=${GOPATH}/src/mirrors_status
@@ -14,10 +16,12 @@ ADD . ${PROJECT_PATH}
 WORKDIR ${PROJECT_PATH}
 RUN make
 
-FROM golang:1.11.8-alpine3.8
+FROM golang:1.12.5-stretch
 
-RUN apk add --update ca-certificates
-RUN rm -rf /var/cache/apk/*
+RUN echo "deb http://mirrors.163.com/debian stretch main non-free contrib" > /etc/apt/sources.list
+RUN apt-get update
+RUN apt-get install ca-certificates
+RUN apt-get clean
 
 ENV GOPATH=/opt/gopath
 ENV PROJECT_PATH=${GOPATH}/src/mirrors_status
@@ -27,5 +31,6 @@ RUN mkdir -p ${PROJECT_PATH}/configs
 WORKDIR ${PROJECT_PATH}
 COPY --from=builder ${PROJECT_PATH}/mirrors_status ${PROJECT_PATH}/mirrors_status
 COPY --from=builder ${PROJECT_PATH}/configs/config.example.yml ${PROJECT_PATH}/configs/config.yml
+COPY --from=builder ${PROJECT_PATH}/configs/jenkins.example.yml ${PROJECT_PATH}/configs/jenkins.yml
 
 CMD ["/opt/gopath/src/mirrors_status/mirrors_status"]

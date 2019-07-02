@@ -1,25 +1,61 @@
 version: '3.3'
 
 networks:
-    backend:
+  backend:
 
 services:
-    server:
-        image: hub.deepin.io/deepin/mirrors_status:latest
-        ports:
-            - 18905:8905
-        restart: always
-        networks:
-            - backend
-        configs:
-            - /data/docker/mirrors_status/config.yml:/opt/gopath/src/mirrors_status/configs/config.yml
+  api:
+    image: 'hub.deepin.com/mirror_management/mirrors_status:latest'
+    ports:
+      - '18908:8080'
+    restart: always
+    environment:
+      - GODEBUG=netdns=cgo
+    networks:
+      - backend
+    configs:
+      - '/data/docker/mirrors_status/config.yml:/opt/gopath/src/mirrors_status/configs/config.yml'
+      - '/data/docker/mirrors_status/jenkins.yml:/opt/gopath/src/mirrors_status/configs/jenkins.yml'
 
-     db:
-         image: mysql
-         ports:
-             - 18906:3306
-        restart: always
-        networks:
-            - backend
-        volumes:
-            - /data/docker/mirrors_status/mysql:/var/lib/mysql
+  influxdb:
+    image: influxdb:1.5.4-alpine
+    restart: always
+    ports:
+      - 18911:8086
+      - 18912:8083
+      - 18913:2003
+    volumes:
+      - /data/docker/mirrors_status/influxdb:/var/lib/influxdb
+    networks:
+      - backend
+    environment:
+      - INFLUXDB_ADMIN_USER=admin
+      - INFLUXDB_ADMIN_PASSWORD=deepinadmin
+      - INFLUXDB_DB=mirror_status
+      - INFLUXDB_HTTP_ENABLED=true
+      - INFLUXDB_HTTP_AUTH_ENABLED=true
+
+  db:
+    image: 'mysql:8.0'
+    environment:
+      - MYSQL_ROOT_PASSWORD=test
+      - MYSQL_DATABASE=mirror_status
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=test
+    ports:
+      - '18909:3306'
+    restart: always
+    networks:
+      - backend
+    volumes:
+      - '/data/docker/mirrors_status/mysql:/var/lib/mysql'
+
+  redis:
+    image: 'redis:latest'
+    ports:
+      - '18910:6379'
+    restart: always
+    networks:
+      - backend
+    volumes:
+      - '/data/docker/mirrors_status/redis:/var/lib/redis'
